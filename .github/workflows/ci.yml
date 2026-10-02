@@ -15,6 +15,10 @@ jobs:
   build:
     runs-on: ubuntu-latest
 
+    env:
+      # The root .npmrc points at Attio's internal Artifactory, which GitHub-hosted runners can't reach.
+      NPM_CONFIG_REGISTRY: https://registry.npmjs.org/
+
     steps:
       - uses: actions/checkout@v4
 
@@ -29,9 +33,6 @@ jobs:
           cache: 'pnpm'
 
       - name: Install dependencies
-        env:
-          # The root .npmrc points at Attio's internal Artifactory, which GitHub-hosted runners can't reach.
-          NPM_CONFIG_REGISTRY: https://registry.npmjs.org/
         run: 'pnpm install --frozen-lockfile'
 
       - name: Run lint
