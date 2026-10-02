@@ -68,7 +68,9 @@ jobs:
 
     env:
       # The root .npmrc points at Attio's internal Artifactory, which GitHub-hosted runners can't reach.
+      # pnpm/action-setup reads NPM_CONFIG_*; pnpm 11 itself only reads PNPM_CONFIG_*.
       NPM_CONFIG_REGISTRY: https://registry.npmjs.org/
+      PNPM_CONFIG_REGISTRY: https://registry.npmjs.org/
 
     permissions:
       # Required to mint an OIDC token for npm provenance attestation.
