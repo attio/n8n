@@ -50,7 +50,14 @@ Refer to the [Attio authentication guide](https://docs.attio.com/rest-api/guides
 
 ## Development
 
-Requires Node.js 22+ and pnpm.
+Requires Node.js 24+ (n8n needs it for `pnpm run dev`) and pnpm 11.
+
+```sh
+nvm use                       # picks up Node 24 from .nvmrc
+npm install -g pnpm@11.26.0   # see note below
+```
+
+Install pnpm with npm rather than Corepack. Node 24 enables Corepack's `pnpm` shim, which downloads pnpm from the public npm registry and ignores the Artifactory registry in `~/.npmrc`, so it times out on Attio's network. If `pnpm` is already the Corepack shim, run `corepack disable pnpm` first.
 
 ```sh
 pnpm install
