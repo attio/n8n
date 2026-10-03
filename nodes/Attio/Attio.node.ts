@@ -40,40 +40,10 @@ export class Attio implements INodeType {
 						name: 'Task',
 						value: 'task',
 					},
-					{
-						name: 'Workspace',
-						value: 'workspace',
-					},
 				],
 				default: 'task',
 			},
 			...taskDescription,
-			{
-				displayName: 'Operation',
-				name: 'operation',
-				type: 'options',
-				noDataExpression: true,
-				displayOptions: {
-					show: {
-						resource: ['workspace'],
-					},
-				},
-				options: [
-					{
-						name: 'Get',
-						value: 'get',
-						description: 'Get the workspace and scopes of the connected access token',
-						action: 'Get the current workspace',
-						routing: {
-							request: {
-								method: 'GET',
-								url: '/self',
-							},
-						},
-					},
-				],
-				default: 'get',
-			},
 		],
 	};
 }

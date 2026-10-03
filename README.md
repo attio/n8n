@@ -35,8 +35,6 @@ Refer to the [n8n community nodes installation guide](https://docs.n8n.io/integr
 - **Task**
   - **Create**: create a plaintext task, optionally with a deadline, assignees and linked records.
   - **Update**: change a task's deadline, completion status, assignees or linked records. Attio doesn't allow task content to be edited through the API.
-- **Workspace**
-  - **Get**: get the workspace and scopes of the connected access token.
 
 Task operations need the `task:read-write`, `object_configuration:read`, `record_permission:read` and `user_management:read` scopes.
 
