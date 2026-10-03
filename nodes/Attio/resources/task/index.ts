@@ -1,4 +1,5 @@
 import type { INodeProperties } from 'n8n-workflow';
+import { objectOptions } from '../../shared/objects';
 import { unwrapResponse } from '../../shared/output';
 import { buildCreateTaskBody, buildUpdateTaskBody } from './requestBody';
 
@@ -72,13 +73,14 @@ const linkedRecordsField: INodeProperties = {
 			name: 'record',
 			values: [
 				{
-					displayName: 'Object',
+					displayName: 'Object Name or ID',
 					name: 'object',
-					type: 'string',
+					type: 'options',
+					typeOptions: objectOptions,
 					default: '',
 					required: true,
-					placeholder: 'e.g. companies',
-					description: 'Slug or ID of the object the record belongs to',
+					description:
+						'Object the record belongs to. Choose from the list, or specify an object slug or ID using an <a href="https://docs.n8n.io/code/expressions/">expression</a>.',
 				},
 				{
 					displayName: 'Record ID',
