@@ -1,4 +1,5 @@
 import { NodeConnectionTypes, type INodeType, type INodeTypeDescription } from 'n8n-workflow';
+import { taskDescription } from './resources/task';
 
 export class Attio implements INodeType {
 	description: INodeTypeDescription = {
@@ -36,12 +37,17 @@ export class Attio implements INodeType {
 				noDataExpression: true,
 				options: [
 					{
+						name: 'Task',
+						value: 'task',
+					},
+					{
 						name: 'Workspace',
 						value: 'workspace',
 					},
 				],
-				default: 'workspace',
+				default: 'task',
 			},
+			...taskDescription,
 			{
 				displayName: 'Operation',
 				name: 'operation',

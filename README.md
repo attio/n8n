@@ -5,6 +5,7 @@ This is an n8n community node package. It lets you use [Attio](https://attio.com
 [n8n](https://n8n.io/) is a [fair-code licensed](https://docs.n8n.io/sustainable-use-license/) workflow automation platform.
 
 [Installation](#installation)
+[Operations](#operations)
 [Credentials](#credentials)
 [Development](#development)
 [Resources](#resources)
@@ -28,6 +29,16 @@ npm install @attio/n8n-nodes-attio
 Then restart n8n.
 
 Refer to the [n8n community nodes installation guide](https://docs.n8n.io/integrations/community-nodes/installation/) for more detail.
+
+## Operations
+
+- **Task**
+  - **Create**: create a plaintext task, optionally with a deadline, assignees and linked records.
+  - **Update**: change a task's deadline, completion status, assignees or linked records. Attio doesn't allow task content to be edited through the API.
+- **Workspace**
+  - **Get**: get the workspace and scopes of the connected access token.
+
+Task operations need the `task:read-write`, `object_configuration:read`, `record_permission:read` and `user_management:read` scopes.
 
 ## Credentials
 
