@@ -1,9 +1,6 @@
 import type { INodeProperties } from 'n8n-workflow';
+import { unwrapResponse } from '../../shared/output';
 import { buildCreateTaskBody, buildUpdateTaskBody } from './requestBody';
-
-const showOnlyForTasks = {
-	resource: ['task'],
-};
 
 const deadlineField: INodeProperties = {
 	displayName: 'Deadline',
@@ -34,12 +31,7 @@ const assigneesField: INodeProperties = {
 				},
 				output: {
 					postReceive: [
-						{
-							type: 'rootProperty',
-							properties: {
-								property: 'data',
-							},
-						},
+						unwrapResponse,
 						{
 							type: 'setKeyValue',
 							properties: {
@@ -108,7 +100,9 @@ export const taskDescription: INodeProperties[] = [
 		type: 'options',
 		noDataExpression: true,
 		displayOptions: {
-			show: showOnlyForTasks,
+			show: {
+				resource: ['task'],
+			},
 		},
 		options: [
 			{
@@ -125,7 +119,7 @@ export const taskDescription: INodeProperties[] = [
 						preSend: [buildCreateTaskBody],
 					},
 					output: {
-						postReceive: [{ type: 'rootProperty', properties: { property: 'data' } }],
+						postReceive: [unwrapResponse],
 					},
 				},
 			},
@@ -143,7 +137,7 @@ export const taskDescription: INodeProperties[] = [
 						preSend: [buildUpdateTaskBody],
 					},
 					output: {
-						postReceive: [{ type: 'rootProperty', properties: { property: 'data' } }],
+						postReceive: [unwrapResponse],
 					},
 				},
 			},
@@ -162,7 +156,7 @@ export const taskDescription: INodeProperties[] = [
 		description: 'Plain text content of the task, up to 2,000 characters',
 		displayOptions: {
 			show: {
-				...showOnlyForTasks,
+				resource: ['task'],
 				operation: ['create'],
 			},
 		},
@@ -175,7 +169,7 @@ export const taskDescription: INodeProperties[] = [
 		default: {},
 		displayOptions: {
 			show: {
-				...showOnlyForTasks,
+				resource: ['task'],
 				operation: ['create'],
 			},
 		},
@@ -191,7 +185,7 @@ export const taskDescription: INodeProperties[] = [
 		description: 'ID of the task to update',
 		displayOptions: {
 			show: {
-				...showOnlyForTasks,
+				resource: ['task'],
 				operation: ['update'],
 			},
 		},
@@ -205,7 +199,7 @@ export const taskDescription: INodeProperties[] = [
 		description: 'Only the deadline, completion status, assignees and linked records can be updated',
 		displayOptions: {
 			show: {
-				...showOnlyForTasks,
+				resource: ['task'],
 				operation: ['update'],
 			},
 		},
