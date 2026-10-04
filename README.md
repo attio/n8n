@@ -34,6 +34,9 @@ Refer to the [n8n community nodes installation guide](https://docs.n8n.io/integr
 
 - **Task**
   - **Create**: create a plaintext task, optionally with a deadline, assignees and linked records.
+  - **Delete**: delete a task by ID.
+  - **Get**: get a task by ID.
+  - **Get Many**: list tasks, optionally filtered by assignee, completion status or linked record, and sorted by created or completed date.
   - **Update**: change a task's deadline, completion status, assignees or linked records. Attio doesn't allow task content to be edited through the API.
 
 Task operations need the `task:read-write`, `object_configuration:read`, `record_permission:read` and `user_management:read` scopes.
