@@ -1,6 +1,7 @@
-import type { INodeProperties } from 'n8n-workflow';
+import type { INodeProperties, INodePropertyTypeOptions } from 'n8n-workflow';
 import { objectOptions } from '../../shared/objects';
-import { unwrapResponse } from '../../shared/output';
+import { deletedResponse, unwrapResponse } from '../../shared/output';
+import { offsetPagination, returnAllFields } from '../../shared/pagination';
 import { buildCreateTaskBody, buildUpdateTaskBody } from './requestBody';
 
 const deadlineField: INodeProperties = {
@@ -19,39 +20,41 @@ const isCompletedField: INodeProperties = {
 	description: 'Whether the task has been completed',
 };
 
+const memberOptions: INodePropertyTypeOptions = {
+	loadOptions: {
+		routing: {
+			request: {
+				method: 'GET',
+				url: '/workspace_members',
+			},
+			output: {
+				postReceive: [
+					unwrapResponse,
+					{
+						type: 'setKeyValue',
+						properties: {
+							name: '={{ [$responseItem.first_name, $responseItem.last_name].join(" ").trim() || $responseItem.email_address }}',
+							value: '={{ $responseItem.id.workspace_member_id }}',
+							description: '={{ $responseItem.email_address }}',
+						},
+					},
+					{
+						type: 'sort',
+						properties: {
+							key: 'name',
+						},
+					},
+				],
+			},
+		},
+	},
+};
+
 const assigneesField: INodeProperties = {
 	displayName: 'Assignee Names or IDs',
 	name: 'assignees',
 	type: 'multiOptions',
-	typeOptions: {
-		loadOptions: {
-			routing: {
-				request: {
-					method: 'GET',
-					url: '/workspace_members',
-				},
-				output: {
-					postReceive: [
-						unwrapResponse,
-						{
-							type: 'setKeyValue',
-							properties: {
-								name: '={{ [$responseItem.first_name, $responseItem.last_name].join(" ").trim() || $responseItem.email_address }}',
-								value: '={{ $responseItem.id.workspace_member_id }}',
-								description: '={{ $responseItem.email_address }}',
-							},
-						},
-						{
-							type: 'sort',
-							properties: {
-								key: 'name',
-							},
-						},
-					],
-				},
-			},
-		},
-	},
+	typeOptions: memberOptions,
 	default: [],
 	description:
 		'Workspace members assigned to the task. Choose from the list, or specify member IDs or email addresses using an <a href="https://docs.n8n.io/code/expressions/">expression</a>.',
@@ -126,6 +129,52 @@ export const taskDescription: INodeProperties[] = [
 				},
 			},
 			{
+				name: 'Delete',
+				value: 'delete',
+				description: 'Delete a task',
+				action: 'Delete a task',
+				routing: {
+					request: {
+						method: 'DELETE',
+						url: '=/tasks/{{ encodeURIComponent($parameter.taskId) }}',
+					},
+					output: {
+						postReceive: [deletedResponse],
+					},
+				},
+			},
+			{
+				name: 'Get',
+				value: 'get',
+				description: 'Get a task',
+				action: 'Get a task',
+				routing: {
+					request: {
+						method: 'GET',
+						url: '=/tasks/{{ encodeURIComponent($parameter.taskId) }}',
+					},
+					output: {
+						postReceive: [unwrapResponse],
+					},
+				},
+			},
+			{
+				name: 'Get Many',
+				value: 'getAll',
+				description: 'Get many tasks',
+				action: 'Get many tasks',
+				routing: {
+					request: {
+						method: 'GET',
+						url: '/tasks',
+					},
+					...offsetPagination(500),
+					output: {
+						postReceive: [unwrapResponse],
+					},
+				},
+			},
+			{
 				name: 'Update',
 				value: 'update',
 				description: 'Update a task',
@@ -184,13 +233,113 @@ export const taskDescription: INodeProperties[] = [
 		required: true,
 		default: '',
 		placeholder: 'e.g. 649e34f4-c39a-4f4d-99ef-48a36bef8f04',
-		description: 'ID of the task to update',
 		displayOptions: {
 			show: {
 				resource: ['task'],
-				operation: ['update'],
+				operation: ['delete', 'get', 'update'],
 			},
 		},
+	},
+	...returnAllFields('task'),
+	{
+		displayName: 'Filters',
+		name: 'filters',
+		type: 'collection',
+		placeholder: 'Add Filter',
+		default: {},
+		displayOptions: {
+			show: {
+				resource: ['task'],
+				operation: ['getAll'],
+			},
+		},
+		options: [
+			{
+				displayName: 'Assignee Name or ID',
+				name: 'assignee',
+				type: 'options',
+				typeOptions: memberOptions,
+				default: '',
+				description:
+					'Only return tasks assigned to this workspace member. Choose from the list, or specify a member ID or email address using an <a href="https://docs.n8n.io/code/expressions/">expression</a>.',
+				routing: {
+					send: {
+						type: 'query',
+						property: 'assignee',
+					},
+				},
+			},
+			{
+				...isCompletedField,
+				description: 'Whether to only return completed tasks, or only incomplete ones',
+				routing: {
+					send: {
+						type: 'query',
+						property: 'is_completed',
+					},
+				},
+			},
+			{
+				displayName: 'Linked Object Name or ID',
+				name: 'linkedObject',
+				type: 'options',
+				typeOptions: objectOptions,
+				default: '',
+				description:
+					'Object of the linked record. Use together with Linked Record ID. Choose from the list, or specify an object slug or ID using an <a href="https://docs.n8n.io/code/expressions/">expression</a>.',
+				routing: {
+					send: {
+						type: 'query',
+						property: 'linked_object',
+					},
+				},
+			},
+			{
+				displayName: 'Linked Record ID',
+				name: 'linkedRecordId',
+				type: 'string',
+				default: '',
+				placeholder: 'e.g. bf071e1f-6035-429d-b874-d83ea64ea13b',
+				description: 'Only return tasks linked to this record. Use together with Linked Object.',
+				routing: {
+					send: {
+						type: 'query',
+						property: 'linked_record_id',
+					},
+				},
+			},
+			{
+				displayName: 'Sort',
+				name: 'sort',
+				type: 'options',
+				options: [
+					{
+						name: 'Completed (Newest First)',
+						value: 'completed_at:desc',
+					},
+					{
+						name: 'Completed (Oldest First)',
+						value: 'completed_at:asc',
+					},
+					{
+						name: 'Created (Newest First)',
+						value: 'created_at:desc',
+					},
+					{
+						name: 'Created (Oldest First)',
+						value: 'created_at:asc',
+					},
+				],
+				default: 'created_at:asc',
+				description: 'Order of the results',
+				routing: {
+					send: {
+						type: 'query',
+						property: 'sort',
+					},
+				},
+			},
+		],
 	},
 	{
 		displayName: 'Update Fields',
@@ -198,7 +347,8 @@ export const taskDescription: INodeProperties[] = [
 		type: 'collection',
 		placeholder: 'Add Field',
 		default: {},
-		description: 'Only the deadline, completion status, assignees and linked records can be updated',
+		description:
+			'Only the deadline, completion status, assignees and linked records can be updated',
 		displayOptions: {
 			show: {
 				resource: ['task'],
