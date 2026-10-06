@@ -39,7 +39,7 @@ Refer to the [n8n community nodes installation guide](https://docs.n8n.io/integr
   - **Get Many**: list notes, optionally only those on a specific record.
   - **Update**: change a note's title or content. Notes can't be moved to another record.
 - **Record**
-  - **Create**: create a record on any object, such as people, companies or deals. Attributes load from the chosen object, or can be mapped automatically from input fields named after attribute slugs.
+  - **Create**: create a record on any object, such as people, companies or deals. Attributes load from the chosen object, or can be mapped automatically from input fields named after attribute slugs. For a person's name, use `first_name` and `last_name` fields, or a `name` field with a full name such as `Jane Doe`.
   - **Delete**: delete a record by ID.
   - **Get**: get a record by ID.
 - **Task**

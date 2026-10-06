@@ -79,6 +79,23 @@ function parseNameFieldId(id: string): { slug: string; part: NamePart } | undefi
 	return match ? { slug: match[1], part: match[2] as NamePart } : undefined;
 }
 
+type Name = Record<NamePart | 'full_name', string>;
+
+// Takes "First Last" order: the last word is the last name and the rest is the first name.
+// The full name is kept as given, which is how Attio displays it
+function splitFullName(fullName: string): Name {
+	const full_name = fullName.trim().replace(/\s+/g, ' ');
+	const lastSpace = full_name.lastIndexOf(' ');
+
+	return lastSpace === -1
+		? { first_name: full_name, last_name: '', full_name }
+		: {
+				first_name: full_name.slice(0, lastSpace),
+				last_name: full_name.slice(lastSpace + 1),
+				full_name,
+			};
+}
+
 async function loadOptions(
 	this: ILoadOptionsFunctions,
 	attributePath: string,
@@ -190,11 +207,25 @@ export async function buildRecordValuesBody(
 	const source = autoMap ? this.getInputData().json : (mapper.value ?? {});
 
 	const values: IDataObject = {};
-	const names: Record<string, Partial<Record<NamePart, string>>> = {};
+	const names: Record<string, Partial<Name>> = {};
 
 	for (const field of mapper.schema) {
 		const namePart = parseNameFieldId(field.id);
-		// Input items carry name parts as plain "first_name" and "last_name" fields
+
+		// Input items carry a name as separate "first_name" and "last_name" fields, or as one
+		// "First Last" field named after the attribute. The separate fields win, as splitting
+		// a full name is a guess
+		if (namePart && autoMap) {
+			const fullName = source[namePart.slug];
+			const hasParts = (Object.keys(nameParts) as NamePart[]).some(
+				(part) => !isEmpty(source[part]),
+			);
+			if (!hasParts && typeof fullName === 'string' && !isEmpty(fullName)) {
+				names[namePart.slug] = splitFullName(fullName);
+				continue;
+			}
+		}
+
 		const value: unknown = source[namePart && autoMap ? namePart.part : field.id];
 		if (isEmpty(value)) continue;
 
@@ -214,11 +245,11 @@ export async function buildRecordValuesBody(
 	}
 
 	// Attio's object syntax for names needs all three properties
-	for (const [slug, { first_name = '', last_name = '' }] of Object.entries(names)) {
+	for (const [slug, { first_name = '', last_name = '', full_name }] of Object.entries(names)) {
 		values[slug] = {
 			first_name,
 			last_name,
-			full_name: [first_name, last_name].filter(Boolean).join(' '),
+			full_name: full_name ?? [first_name, last_name].filter(Boolean).join(' '),
 		};
 	}
 
