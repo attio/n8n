@@ -129,6 +129,10 @@ export const recordDescription: INodeProperties[] = [
 				resource: ['record'],
 				operation: ['create'],
 			},
+			// Otherwise the mapper reports the object as having no writable attributes
+			hide: {
+				object: [''],
+			},
 		},
 	},
 ];

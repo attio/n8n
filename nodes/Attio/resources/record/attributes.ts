@@ -1,5 +1,6 @@
 import {
 	NodeOperationError,
+	type NodeApiError,
 	tryToParseBoolean,
 	tryToParseNumber,
 	type FieldType,
@@ -53,9 +54,29 @@ function toFieldType(attribute: Attribute): FieldType {
 	}
 }
 
-// The string shorthand for names is "Last, First"; without a comma it's all first name
-function toDisplayName(attribute: Attribute): string {
-	return attribute.type === 'personal-name' ? `${attribute.title} (Last, First)` : attribute.title;
+const nameParts = {
+	first_name: 'First Name',
+	last_name: 'Last Name',
+} as const;
+
+type NamePart = keyof typeof nameParts;
+
+// Name attributes are split into a field per part, with ids like "name.first_name", so
+// users don't have to write Attio's "Last, First" string shorthand
+function toNameFields(attribute: Attribute): ResourceMapperField[] {
+	return (Object.keys(nameParts) as NamePart[]).map((part) => ({
+		id: `${attribute.api_slug}.${part}`,
+		displayName: nameParts[part],
+		type: 'string',
+		required: part === 'first_name' && attribute.is_required,
+		defaultMatch: false,
+		display: true,
+	}));
+}
+
+function parseNameFieldId(id: string): { slug: string; part: NamePart } | undefined {
+	const match = /^(.+)\.(first_name|last_name)$/.exec(id);
+	return match ? { slug: match[1], part: match[2] as NamePart } : undefined;
 }
 
 async function loadOptions(
@@ -74,6 +95,42 @@ async function loadOptions(
 		.map((option) => ({ name: option.title, value: option.title }));
 }
 
+async function loadAttributeFields(
+	this: ILoadOptionsFunctions,
+	object: string,
+): Promise<ResourceMapperField[]> {
+	const attributePath = `/objects/${encodeURIComponent(object)}/attributes`;
+	const attributes = (await attioGet.call(this, attributePath)) as Attribute[];
+
+	const fields = await Promise.all(
+		attributes
+			.filter((attribute) => attribute.is_writable && !attribute.is_archived)
+			.map(async (attribute): Promise<ResourceMapperField[]> => {
+				if (attribute.type === 'personal-name') return toNameFields(attribute);
+
+				const type = toFieldType(attribute);
+
+				return [
+					{
+						id: attribute.api_slug,
+						displayName: attribute.title,
+						type,
+						options:
+							type === 'options'
+								? await loadOptions.call(this, attributePath, attribute)
+								: undefined,
+						// Attio fills required attributes that have a default value itself
+						required: attribute.is_required && !attribute.is_default_value_enabled,
+						defaultMatch: false,
+						display: true,
+					},
+				];
+			}),
+	);
+
+	return fields.flat();
+}
+
 export async function getRecordAttributes(
 	this: ILoadOptionsFunctions,
 ): Promise<ResourceMapperFields> {
@@ -82,30 +139,17 @@ export async function getRecordAttributes(
 		return { fields: [], emptyFieldsNotice: 'Choose an object to see its attributes' };
 	}
 
-	const attributePath = `/objects/${encodeURIComponent(object)}/attributes`;
-	const attributes = (await attioGet.call(this, attributePath)) as Attribute[];
-
-	const fields = await Promise.all(
-		attributes
-			.filter((attribute) => attribute.is_writable && !attribute.is_archived)
-			.map(async (attribute): Promise<ResourceMapperField> => {
-				const type = toFieldType(attribute);
-
-				return {
-					id: attribute.api_slug,
-					displayName: toDisplayName(attribute),
-					type,
-					options:
-						type === 'options' ? await loadOptions.call(this, attributePath, attribute) : undefined,
-					// Attio fills required attributes that have a default value itself
-					required: attribute.is_required && !attribute.is_default_value_enabled,
-					defaultMatch: false,
-					display: true,
-				};
-			}),
-	);
-
-	return { fields };
+	try {
+		return { fields: await loadAttributeFields.call(this, object) };
+	} catch (error) {
+		// The editor drops errors from this method and only says there are no fields,
+		// so the reason is passed back as the notice instead
+		const { message, description } = error as NodeApiError;
+		return {
+			fields: [],
+			emptyFieldsNotice: `Couldn't load attributes: ${[message, description].filter(Boolean).join(' – ')}`,
+		};
+	}
 }
 
 function isEmpty(value: unknown): boolean {
@@ -142,13 +186,22 @@ export async function buildRecordValuesBody(
 	requestOptions: IHttpRequestOptions,
 ): Promise<IHttpRequestOptions> {
 	const mapper = this.getNodeParameter('values') as ResourceMapperValue;
-	const source =
-		mapper.mappingMode === 'autoMapInputData' ? this.getInputData().json : (mapper.value ?? {});
+	const autoMap = mapper.mappingMode === 'autoMapInputData';
+	const source = autoMap ? this.getInputData().json : (mapper.value ?? {});
 
 	const values: IDataObject = {};
+	const names: Record<string, Partial<Record<NamePart, string>>> = {};
+
 	for (const field of mapper.schema) {
-		const value: unknown = source[field.id];
+		const namePart = parseNameFieldId(field.id);
+		// Input items carry name parts as plain "first_name" and "last_name" fields
+		const value: unknown = source[namePart && autoMap ? namePart.part : field.id];
 		if (isEmpty(value)) continue;
+
+		if (namePart) {
+			names[namePart.slug] = { ...names[namePart.slug], [namePart.part]: String(value).trim() };
+			continue;
+		}
 
 		try {
 			values[field.id] = toAttioValue(field, value) as IDataObject[string];
@@ -160,12 +213,20 @@ export async function buildRecordValuesBody(
 		}
 	}
 
+	// Attio's object syntax for names needs all three properties
+	for (const [slug, { first_name = '', last_name = '' }] of Object.entries(names)) {
+		values[slug] = {
+			first_name,
+			last_name,
+			full_name: [first_name, last_name].filter(Boolean).join(' '),
+		};
+	}
+
 	if (Object.keys(values).length === 0) {
 		throw new NodeOperationError(this.getNode(), 'No attribute values to write', {
-			description:
-				mapper.mappingMode === 'autoMapInputData'
-					? "None of the input item's fields match an attribute slug on this object"
-					: 'Add at least one attribute under "Attributes"',
+			description: autoMap
+				? "None of the input item's fields match an attribute slug on this object"
+				: 'Add at least one attribute under "Attributes"',
 			itemIndex: this.getItemIndex(),
 		});
 	}
