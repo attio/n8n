@@ -20,6 +20,7 @@ type AttributeResponse = {
 	type: string;
 	is_writable: boolean;
 	is_required: boolean;
+	is_unique: boolean;
 	is_multiselect: boolean;
 	is_default_value_enabled: boolean;
 };
@@ -36,6 +37,7 @@ function isAttributeResponse(value: unknown): value is AttributeResponse {
 		typeof value.type === 'string' &&
 		typeof value.is_writable === 'boolean' &&
 		typeof value.is_required === 'boolean' &&
+		typeof value.is_unique === 'boolean' &&
 		typeof value.is_multiselect === 'boolean' &&
 		typeof value.is_default_value_enabled === 'boolean'
 	);
@@ -72,13 +74,14 @@ const nameFieldSuffix = '.full_name';
 
 // Name attributes take a full name in "First Last" order rather than Attio's "Last, First"
 // string shorthand. The field id is "<slug>.full_name" so the name can be told apart and split
-function toNameField(attribute: AttributeResponse): ResourceMapperField {
+function toNameField(attribute: AttributeResponse, isUpdate: boolean): ResourceMapperField {
 	return {
 		id: `${attribute.api_slug}${nameFieldSuffix}`,
 		displayName: attribute.title,
 		type: 'string',
-		required: attribute.is_required,
+		required: !isUpdate && attribute.is_required,
 		defaultMatch: false,
+		canBeUsedToMatch: false,
 		display: true,
 	};
 }
@@ -121,7 +124,10 @@ async function loadOptions(
 async function loadAttributeFields(
 	this: ILoadOptionsFunctions,
 	object: string,
+	operation: string,
 ): Promise<ResourceMapperField[]> {
+	const isUpdate = operation === 'update';
+
 	const attributePath = `/objects/${encodeURIComponent(object)}/attributes`;
 	const attributes = await attioGetList(this, attributePath, isAttributeResponse);
 
@@ -130,7 +136,7 @@ async function loadAttributeFields(
 			// Archived attributes and options are left out unless show_archived is set
 			.filter((attribute) => attribute.is_writable)
 			.map(async (attribute): Promise<ResourceMapperField[]> => {
-				if (attribute.type === 'personal-name') return [toNameField(attribute)];
+				if (attribute.type === 'personal-name') return [toNameField(attribute, isUpdate)];
 
 				const type = toFieldType(attribute);
 
@@ -144,8 +150,9 @@ async function loadAttributeFields(
 								? await loadOptions.call(this, attributePath, attribute)
 								: undefined,
 						// Attio fills required attributes that have a default value itself
-						required: attribute.is_required && !attribute.is_default_value_enabled,
+						required: !isUpdate && attribute.is_required && !attribute.is_default_value_enabled,
 						defaultMatch: false,
+						canBeUsedToMatch: attribute.is_unique,
 						display: true,
 					},
 				];
@@ -159,12 +166,13 @@ export async function getRecordAttributes(
 	this: ILoadOptionsFunctions,
 ): Promise<ResourceMapperFields> {
 	const object = this.getNodeParameter('object', '') as string;
+	const operation = this.getNodeParameter('operation', '') as string;
 	if (!object) {
 		return { fields: [], emptyFieldsNotice: 'Choose an object to see its attributes' };
 	}
 
 	try {
-		return { fields: await loadAttributeFields.call(this, object) };
+		return { fields: await loadAttributeFields.call(this, object, operation) };
 	} catch (error) {
 		// The editor drops errors from this method and only says there are no fields,
 		// so the reason is passed back as the notice instead
@@ -229,6 +237,26 @@ export async function buildRecordValuesBody(
 	}
 
 	requestOptions.body = { data: { values } };
+
+	return requestOptions;
+}
+
+export async function buildRecordUpsertRequest(
+	this: IExecuteSingleFunctions,
+	requestOptions: IHttpRequestOptions,
+): Promise<IHttpRequestOptions> {
+	const mapper = this.getNodeParameter('values') as ResourceMapperValue;
+	const [matchingAttribute] = mapper.matchingColumns ?? [];
+	if (!matchingAttribute) {
+		throw new NodeOperationError(this.getNode(), 'No attribute to match on', {
+			description: 'Choose a unique attribute under "Attribute to Match On"',
+			itemIndex: this.getItemIndex(),
+		});
+	}
+
+	await buildRecordValuesBody.call(this, requestOptions);
+
+	requestOptions.qs = { ...requestOptions.qs, matching_attribute: matchingAttribute };
 
 	return requestOptions;
 }

@@ -40,8 +40,10 @@ Refer to the [n8n community nodes installation guide](https://docs.n8n.io/integr
   - **Update**: change a note's title or content. Notes can't be moved to another record.
 - **Record**
   - **Create**: create a record on any object, such as people, companies or deals. Attributes load from the chosen object, or can be mapped automatically from input fields named after attribute slugs. A person's name is one field that takes the full name in "First Last" order, such as `Jane Doe`. The last word becomes the last name.
+  - **Create or Update**: create a record, or update the existing one that has the same value for a unique attribute, such as `email_addresses` for people or `domains` for companies. The attribute to match on must be given a value. Multi-value attributes are overwritten, except the one being matched on, which keeps its existing values.
   - **Delete**: delete a record by ID.
   - **Get**: get a record by ID.
+  - **Update**: update a record by ID, changing only the attributes given. Values for multi-value attributes are added to the existing ones, or replace them with **Multi-Select Write Mode** set to **Overwrite**.
 - **Task**
   - **Create**: create a plaintext task, optionally with a deadline, assignees and linked records.
   - **Delete**: delete a task by ID.
