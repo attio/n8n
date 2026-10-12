@@ -87,13 +87,12 @@ function splitFullName(fullName: string): Name {
 	const full_name = fullName.trim().replace(/\s+/g, ' ');
 	const lastSpace = full_name.lastIndexOf(' ');
 
-	return lastSpace === -1
-		? { first_name: full_name, last_name: '', full_name }
-		: {
-				first_name: full_name.slice(0, lastSpace),
-				last_name: full_name.slice(lastSpace + 1),
-				full_name,
-			};
+	const [first_name, last_name] =
+		lastSpace === -1
+			? [full_name, '']
+			: [full_name.slice(0, lastSpace), full_name.slice(lastSpace + 1)];
+
+	return { first_name, last_name, full_name };
 }
 
 async function loadOptions(
