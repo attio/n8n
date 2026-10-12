@@ -54,35 +54,29 @@ function toFieldType(attribute: Attribute): FieldType {
 	}
 }
 
-const nameParts = {
-	first_name: 'First Name',
-	last_name: 'Last Name',
-} as const;
+const nameFieldSuffix = '.full_name';
 
-type NamePart = keyof typeof nameParts;
-
-// Name attributes are split into a field per part, with ids like "name.first_name", so
-// users don't have to write Attio's "Last, First" string shorthand
-function toNameFields(attribute: Attribute): ResourceMapperField[] {
-	return (Object.keys(nameParts) as NamePart[]).map((part) => ({
-		id: `${attribute.api_slug}.${part}`,
-		displayName: nameParts[part],
+// Name attributes take a full name in "First Last" order rather than Attio's "Last, First"
+// string shorthand. The field id is "<slug>.full_name" so the name can be told apart and split
+function toNameField(attribute: Attribute): ResourceMapperField {
+	return {
+		id: `${attribute.api_slug}${nameFieldSuffix}`,
+		displayName: attribute.title,
 		type: 'string',
-		required: part === 'first_name' && attribute.is_required,
+		required: attribute.is_required,
 		defaultMatch: false,
 		display: true,
-	}));
+	};
 }
 
-function parseNameFieldId(id: string): { slug: string; part: NamePart } | undefined {
-	const match = /^(.+)\.(first_name|last_name)$/.exec(id);
-	return match ? { slug: match[1], part: match[2] as NamePart } : undefined;
+function parseNameFieldSlug(id: string): string | undefined {
+	return id.endsWith(nameFieldSuffix) ? id.slice(0, -nameFieldSuffix.length) : undefined;
 }
 
-type Name = Record<NamePart | 'full_name', string>;
+type Name = Record<'first_name' | 'last_name' | 'full_name', string>;
 
-// Takes "First Last" order: the last word is the last name and the rest is the first name.
-// The full name is kept as given, which is how Attio displays it
+// The last word is the last name and the rest is the first name. The full name is kept as
+// given, which is how Attio displays it. Attio's object syntax for names needs all three
 function splitFullName(fullName: string): Name {
 	const full_name = fullName.trim().replace(/\s+/g, ' ');
 	const lastSpace = full_name.lastIndexOf(' ');
@@ -122,7 +116,7 @@ async function loadAttributeFields(
 		attributes
 			.filter((attribute) => attribute.is_writable && !attribute.is_archived)
 			.map(async (attribute): Promise<ResourceMapperField[]> => {
-				if (attribute.type === 'personal-name') return toNameFields(attribute);
+				if (attribute.type === 'personal-name') return [toNameField(attribute)];
 
 				const type = toFieldType(attribute);
 
@@ -206,30 +200,16 @@ export async function buildRecordValuesBody(
 	const source = autoMap ? this.getInputData().json : (mapper.value ?? {});
 
 	const values: IDataObject = {};
-	const names: Record<string, Partial<Name>> = {};
 
 	for (const field of mapper.schema) {
-		const namePart = parseNameFieldId(field.id);
+		const nameSlug = parseNameFieldSlug(field.id);
 
-		// Input items carry a name as separate "first_name" and "last_name" fields, or as one
-		// "First Last" field named after the attribute. The separate fields win, as splitting
-		// a full name is a guess
-		if (namePart && autoMap) {
-			const fullName = source[namePart.slug];
-			const hasParts = (Object.keys(nameParts) as NamePart[]).some(
-				(part) => !isEmpty(source[part]),
-			);
-			if (!hasParts && typeof fullName === 'string' && !isEmpty(fullName)) {
-				names[namePart.slug] = splitFullName(fullName);
-				continue;
-			}
-		}
-
-		const value: unknown = source[namePart && autoMap ? namePart.part : field.id];
+		// Input items carry a name in a field named after the attribute, like "name"
+		const value: unknown = source[nameSlug && autoMap ? nameSlug : field.id];
 		if (isEmpty(value)) continue;
 
-		if (namePart) {
-			names[namePart.slug] = { ...names[namePart.slug], [namePart.part]: String(value).trim() };
+		if (nameSlug) {
+			values[nameSlug] = splitFullName(String(value));
 			continue;
 		}
 
@@ -241,15 +221,6 @@ export async function buildRecordValuesBody(
 				itemIndex: this.getItemIndex(),
 			});
 		}
-	}
-
-	// Attio's object syntax for names needs all three properties
-	for (const [slug, { first_name = '', last_name = '', full_name }] of Object.entries(names)) {
-		values[slug] = {
-			first_name,
-			last_name,
-			full_name: full_name ?? [first_name, last_name].filter(Boolean).join(' '),
-		};
 	}
 
 	if (Object.keys(values).length === 0) {
