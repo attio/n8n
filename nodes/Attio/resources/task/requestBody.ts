@@ -4,6 +4,7 @@ import {
 	type IExecuteSingleFunctions,
 	type IHttpRequestOptions,
 } from 'n8n-workflow';
+import { invalidValueError, isEmail, isUuid } from '../../shared/validation';
 
 type LinkedRecordsParameter = {
 	record?: Array<{ object: string; recordId: string }>;
@@ -31,24 +32,44 @@ function toDeadline(this: IExecuteSingleFunctions, value: string | undefined): s
 }
 
 // Assignees come from the member picker as IDs, or from an expression as IDs or emails
-function toAssignees(value: TaskFields['assignees']): IDataObject[] {
+function toAssignees(this: IExecuteSingleFunctions, value: TaskFields['assignees']): IDataObject[] {
 	const assignees = typeof value === 'string' ? value.split(',') : (value ?? []);
 
 	return assignees
 		.map((assignee) => assignee.trim())
 		.filter((assignee) => assignee !== '')
-		.map((assignee) =>
-			assignee.includes('@')
-				? { workspace_member_email_address: assignee }
-				: { referenced_actor_type: 'workspace-member', referenced_actor_id: assignee },
-		);
+		.map((assignee) => {
+			if (isEmail(assignee)) return { workspace_member_email_address: assignee };
+			if (isUuid(assignee)) {
+				return { referenced_actor_type: 'workspace-member', referenced_actor_id: assignee };
+			}
+
+			throw invalidValueError.call(
+				this,
+				'assignee',
+				assignee,
+				'Use a workspace member ID or email address',
+			);
+		});
 }
 
-function toLinkedRecords(value: LinkedRecordsParameter | undefined): IDataObject[] {
-	return (value?.record ?? []).map(({ object, recordId }) => ({
-		target_object: object.trim(),
-		target_record_id: recordId.trim(),
-	}));
+function toLinkedRecords(
+	this: IExecuteSingleFunctions,
+	value: LinkedRecordsParameter | undefined,
+): IDataObject[] {
+	return (value?.record ?? []).map(({ object, recordId }) => {
+		const id = recordId.trim();
+		if (!isUuid(id)) {
+			throw invalidValueError.call(
+				this,
+				'linked record ID',
+				id,
+				'Use a record ID, for example bf071e1f-6035-429d-b874-d83ea64ea13b',
+			);
+		}
+
+		return { target_object: object.trim(), target_record_id: id };
+	});
 }
 
 export async function buildCreateTaskBody(
@@ -65,8 +86,8 @@ export async function buildCreateTaskBody(
 			format: 'plaintext',
 			deadline_at: toDeadline.call(this, fields.deadlineAt),
 			is_completed: fields.isCompleted ?? false,
-			linked_records: toLinkedRecords(fields.linkedRecords),
-			assignees: toAssignees(fields.assignees),
+			linked_records: toLinkedRecords.call(this, fields.linkedRecords),
+			assignees: toAssignees.call(this, fields.assignees),
 		},
 	};
 
@@ -82,8 +103,9 @@ export async function buildUpdateTaskBody(
 
 	if (fields.deadlineAt !== undefined) data.deadline_at = toDeadline.call(this, fields.deadlineAt);
 	if (fields.isCompleted !== undefined) data.is_completed = fields.isCompleted;
-	if (fields.linkedRecords !== undefined) data.linked_records = toLinkedRecords(fields.linkedRecords);
-	if (fields.assignees !== undefined) data.assignees = toAssignees(fields.assignees);
+	if (fields.linkedRecords !== undefined)
+		data.linked_records = toLinkedRecords.call(this, fields.linkedRecords);
+	if (fields.assignees !== undefined) data.assignees = toAssignees.call(this, fields.assignees);
 
 	if (Object.keys(data).length === 0) {
 		throw new NodeOperationError(this.getNode(), 'No fields to update', {
