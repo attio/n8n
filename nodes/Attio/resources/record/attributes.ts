@@ -15,7 +15,7 @@ import {
 } from 'n8n-workflow';
 import { attioGet } from '../../shared/request';
 
-type Attribute = {
+type AttributeResponse = {
 	title: string;
 	api_slug: string;
 	type: string;
@@ -26,14 +26,14 @@ type Attribute = {
 	is_default_value_enabled: boolean;
 };
 
-type AttributeOption = {
+type AttributeOptionResponse = {
 	title: string;
 	is_archived: boolean;
 };
 
 // Every writable attribute type accepts a plain string, number or boolean shorthand,
 // so values are sent as entered rather than built into Attio's value objects
-function toFieldType(attribute: Attribute): FieldType {
+function toFieldType(attribute: AttributeResponse): FieldType {
 	if (attribute.is_multiselect) return 'array';
 
 	switch (attribute.type) {
@@ -58,7 +58,7 @@ const nameFieldSuffix = '.full_name';
 
 // Name attributes take a full name in "First Last" order rather than Attio's "Last, First"
 // string shorthand. The field id is "<slug>.full_name" so the name can be told apart and split
-function toNameField(attribute: Attribute): ResourceMapperField {
+function toNameField(attribute: AttributeResponse): ResourceMapperField {
 	return {
 		id: `${attribute.api_slug}${nameFieldSuffix}`,
 		displayName: attribute.title,
@@ -92,13 +92,13 @@ function splitFullName(fullName: string): Name {
 async function loadOptions(
 	this: ILoadOptionsFunctions,
 	attributePath: string,
-	attribute: Attribute,
+	attribute: AttributeResponse,
 ): Promise<INodePropertyOptions[]> {
 	const endpoint = attribute.type === 'status' ? 'statuses' : 'options';
 	const options = (await attioGet.call(
 		this,
 		`${attributePath}/${encodeURIComponent(attribute.api_slug)}/${endpoint}`,
-	)) as AttributeOption[];
+	)) as AttributeOptionResponse[];
 
 	return options
 		.filter((option) => !option.is_archived)
@@ -110,7 +110,7 @@ async function loadAttributeFields(
 	object: string,
 ): Promise<ResourceMapperField[]> {
 	const attributePath = `/objects/${encodeURIComponent(object)}/attributes`;
-	const attributes = (await attioGet.call(this, attributePath)) as Attribute[];
+	const attributes = (await attioGet.call(this, attributePath)) as AttributeResponse[];
 
 	const fields = await Promise.all(
 		attributes
