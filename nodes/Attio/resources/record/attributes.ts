@@ -20,7 +20,6 @@ type AttributeResponse = {
 	api_slug: string;
 	type: string;
 	is_writable: boolean;
-	is_archived: boolean;
 	is_required: boolean;
 	is_multiselect: boolean;
 	is_default_value_enabled: boolean;
@@ -28,7 +27,6 @@ type AttributeResponse = {
 
 type AttributeOptionResponse = {
 	title: string;
-	is_archived: boolean;
 };
 
 // Every writable attribute type accepts a plain string, number or boolean shorthand,
@@ -100,9 +98,7 @@ async function loadOptions(
 		`${attributePath}/${encodeURIComponent(attribute.api_slug)}/${endpoint}`,
 	)) as AttributeOptionResponse[];
 
-	return options
-		.filter((option) => !option.is_archived)
-		.map((option) => ({ name: option.title, value: option.title }));
+	return options.map((option) => ({ name: option.title, value: option.title }));
 }
 
 async function loadAttributeFields(
@@ -114,7 +110,8 @@ async function loadAttributeFields(
 
 	const fields = await Promise.all(
 		attributes
-			.filter((attribute) => attribute.is_writable && !attribute.is_archived)
+			// Archived attributes and options are left out unless show_archived is set
+			.filter((attribute) => attribute.is_writable)
 			.map(async (attribute): Promise<ResourceMapperField[]> => {
 				if (attribute.type === 'personal-name') return [toNameField(attribute)];
 
