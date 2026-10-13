@@ -1,14 +1,34 @@
-import type { IDataObject, ILoadOptionsFunctions } from 'n8n-workflow';
+import { NodeOperationError, type ILoadOptionsFunctions } from 'n8n-workflow';
 
 export const attioBaseUrl = 'https://api.attio.com/v2';
 
-// For load methods, which can't use the node's declarative routing
-export async function attioGet(this: ILoadOptionsFunctions, path: string): Promise<unknown> {
-	const response = (await this.helpers.httpRequestWithAuthentication.call(this, 'attioApi', {
-		method: 'GET',
-		url: `${attioBaseUrl}${path}`,
-		json: true,
-	})) as IDataObject;
+export function isObject(value: unknown): value is Record<string, unknown> {
+	return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
 
-	return response.data;
+// For load methods, which can't use the node's declarative routing. Attio list endpoints
+// return { data: [...] }, and each item is checked against the shape the caller expects
+export async function attioGetList<T>(
+	context: ILoadOptionsFunctions,
+	path: string,
+	isItem: (item: unknown) => item is T,
+): Promise<T[]> {
+	const response: unknown = await context.helpers.httpRequestWithAuthentication.call(
+		context,
+		'attioApi',
+		{
+			method: 'GET',
+			url: `${attioBaseUrl}${path}`,
+			json: true,
+		},
+	);
+
+	const data = isObject(response) ? response.data : undefined;
+	if (!Array.isArray(data) || !data.every(isItem)) {
+		throw new NodeOperationError(context.getNode(), 'Unexpected response from Attio', {
+			description: `GET ${path} didn't return the expected list`,
+		});
+	}
+
+	return data;
 }

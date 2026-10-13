@@ -13,7 +13,7 @@ import {
 	type ResourceMapperFields,
 	type ResourceMapperValue,
 } from 'n8n-workflow';
-import { attioGet } from '../../shared/request';
+import { attioGetList, isObject } from '../../shared/request';
 
 type AttributeResponse = {
 	title: string;
@@ -28,6 +28,23 @@ type AttributeResponse = {
 type AttributeOptionResponse = {
 	title: string;
 };
+
+function isAttributeResponse(value: unknown): value is AttributeResponse {
+	return (
+		isObject(value) &&
+		typeof value.title === 'string' &&
+		typeof value.api_slug === 'string' &&
+		typeof value.type === 'string' &&
+		typeof value.is_writable === 'boolean' &&
+		typeof value.is_required === 'boolean' &&
+		typeof value.is_multiselect === 'boolean' &&
+		typeof value.is_default_value_enabled === 'boolean'
+	);
+}
+
+function isAttributeOptionResponse(value: unknown): value is AttributeOptionResponse {
+	return isObject(value) && typeof value.title === 'string';
+}
 
 // Every writable attribute type accepts a plain string, number or boolean shorthand,
 // so values are sent as entered rather than built into Attio's value objects
@@ -93,10 +110,11 @@ async function loadOptions(
 	attribute: AttributeResponse,
 ): Promise<INodePropertyOptions[]> {
 	const endpoint = attribute.type === 'status' ? 'statuses' : 'options';
-	const options = (await attioGet.call(
+	const options = await attioGetList(
 		this,
 		`${attributePath}/${encodeURIComponent(attribute.api_slug)}/${endpoint}`,
-	)) as AttributeOptionResponse[];
+		isAttributeOptionResponse,
+	);
 
 	return options.map((option) => ({ name: option.title, value: option.title }));
 }
@@ -106,7 +124,7 @@ async function loadAttributeFields(
 	object: string,
 ): Promise<ResourceMapperField[]> {
 	const attributePath = `/objects/${encodeURIComponent(object)}/attributes`;
-	const attributes = (await attioGet.call(this, attributePath)) as AttributeResponse[];
+	const attributes = await attioGetList(this, attributePath, isAttributeResponse);
 
 	const fields = await Promise.all(
 		attributes
