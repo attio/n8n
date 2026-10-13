@@ -17,7 +17,7 @@ const isCompletedField: INodeProperties = {
 	name: 'isCompleted',
 	type: 'boolean',
 	default: false,
-	description: 'Whether the task has been completed',
+	description: 'Whether the task has been completed. Defaults to false.',
 };
 
 const memberOptions: INodePropertyTypeOptions = {
