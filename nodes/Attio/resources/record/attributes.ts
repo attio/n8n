@@ -1,8 +1,7 @@
 import {
 	NodeOperationError,
 	type NodeApiError,
-	tryToParseBoolean,
-	tryToParseNumber,
+	validateFieldType,
 	type FieldType,
 	type IDataObject,
 	type IExecuteSingleFunctions,
@@ -183,29 +182,6 @@ function isEmpty(value: unknown): boolean {
 	);
 }
 
-function toArray(value: unknown): unknown[] {
-	if (Array.isArray(value)) return value;
-	if (typeof value === 'string' && value.trim().startsWith('[')) {
-		const parsed: unknown = JSON.parse(value);
-		if (Array.isArray(parsed)) return parsed;
-	}
-
-	return [value];
-}
-
-function toAttioValue(field: ResourceMapperField, value: unknown): unknown {
-	switch (field.type) {
-		case 'array':
-			return toArray(value);
-		case 'number':
-			return tryToParseNumber(value);
-		case 'boolean':
-			return tryToParseBoolean(value);
-		default:
-			return value;
-	}
-}
-
 export async function buildRecordValuesBody(
 	this: IExecuteSingleFunctions,
 	requestOptions: IHttpRequestOptions,
@@ -228,14 +204,19 @@ export async function buildRecordValuesBody(
 			continue;
 		}
 
-		try {
-			values[field.id] = toAttioValue(field, value) as IDataObject[string];
-		} catch {
+		// n8n's own conversion, which it only applies to manually mapped values, so auto-mapped
+		// input is converted the same way. Arrays arrive as JSON text from the editor
+		const result = validateFieldType(field.displayName, value, field.type ?? 'string', {
+			valueOptions: field.options,
+		});
+		if (!result.valid) {
 			throw new NodeOperationError(this.getNode(), `Invalid value for "${field.displayName}"`, {
-				description: `Expected a ${field.type}, got ${JSON.stringify(value)}`,
+				description: result.errorMessage,
 				itemIndex: this.getItemIndex(),
 			});
 		}
+
+		values[field.id] = result.newValue as IDataObject[string];
 	}
 
 	if (Object.keys(values).length === 0) {
