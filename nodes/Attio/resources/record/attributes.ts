@@ -14,7 +14,8 @@ import {
 } from 'n8n-workflow';
 import { attioGetList, isObject } from '../../shared/request';
 
-type AttributeResponse = {
+export type AttributeResponse = {
+	id: { attribute_id: string };
 	title: string;
 	api_slug: string;
 	type: string;
@@ -29,9 +30,11 @@ type AttributeOptionResponse = {
 	title: string;
 };
 
-function isAttributeResponse(value: unknown): value is AttributeResponse {
+export function isAttributeResponse(value: unknown): value is AttributeResponse {
 	return (
 		isObject(value) &&
+		isObject(value.id) &&
+		typeof value.id.attribute_id === 'string' &&
 		typeof value.title === 'string' &&
 		typeof value.api_slug === 'string' &&
 		typeof value.type === 'string' &&

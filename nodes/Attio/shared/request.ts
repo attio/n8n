@@ -1,4 +1,8 @@
-import { NodeOperationError, type ILoadOptionsFunctions } from 'n8n-workflow';
+import {
+	NodeOperationError,
+	type IExecuteSingleFunctions,
+	type ILoadOptionsFunctions,
+} from 'n8n-workflow';
 
 export const attioBaseUrl = 'https://api.attio.com/v2';
 
@@ -6,10 +10,11 @@ export function isObject(value: unknown): value is Record<string, unknown> {
 	return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-// For load methods, which can't use the node's declarative routing. Attio list endpoints
-// return { data: [...] }, and each item is checked against the shape the caller expects
+// For load methods and preSend functions, which can't use the node's declarative routing.
+// Attio list endpoints return { data: [...] }, and each item is checked against the shape
+// the caller expects
 export async function attioGetList<T>(
-	context: ILoadOptionsFunctions,
+	context: ILoadOptionsFunctions | IExecuteSingleFunctions,
 	path: string,
 	isItem: (item: unknown) => item is T,
 ): Promise<T[]> {

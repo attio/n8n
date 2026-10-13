@@ -1,7 +1,11 @@
 import type { INodeProperties, IN8nRequestOperationPaginationOffset } from 'n8n-workflow';
 
-// Always paginates; "Limit" caps the results via maxResults, so any limit works regardless of page size
-export function offsetPagination(pageSize: number): {
+// Always paginates; "Limit" caps the results via maxResults, so any limit works regardless of page size.
+// Query endpoints take limit and offset in the request body, alongside the filter
+export function offsetPagination(
+	pageSize: number,
+	type: 'query' | 'body' = 'query',
+): {
 	send: { paginate: true };
 	operations: { pagination: IN8nRequestOperationPaginationOffset };
 } {
@@ -16,7 +20,7 @@ export function offsetPagination(pageSize: number): {
 					limitParameter: 'limit',
 					offsetParameter: 'offset',
 					pageSize,
-					type: 'query',
+					type,
 				},
 			},
 		},
