@@ -3,8 +3,8 @@ import type {
 	INodeListSearchResult,
 	ResourceMapperFields,
 } from 'n8n-workflow';
-import { isListResponse } from '../../shared/lists';
-import { attioGet, attioRequest, isObject } from '../../shared/request';
+import { getListParentObject } from '../../shared/lists';
+import { attioRequest, isObject } from '../../shared/request';
 import { getAttributeFields } from '../record/attributes';
 
 type RecordSearchResult = {
@@ -52,13 +52,8 @@ export async function searchListParentRecords(
 	const list = this.getCurrentNodeParameter('list') as string | undefined;
 	if (!list) return { results: [] };
 
-	const { parent_object: objects } = await attioGet(
-		this,
-		`/lists/${encodeURIComponent(list)}`,
-		isListResponse,
-		'list',
-	);
-	if (objects.length === 0) return { results: [] };
+	// Fails for legacy lists, which Create can't add records to either
+	const object = await getListParentObject(this, list);
 
 	const records = await attioRequest(
 		this,
@@ -68,7 +63,7 @@ export async function searchListParentRecords(
 			body: {
 				// An empty query returns Attio's default set of results
 				query: filter ?? '',
-				objects,
+				objects: [object],
 				limit: 25,
 				request_as: { type: 'workspace' },
 			},

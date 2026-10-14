@@ -1,32 +1,7 @@
-import {
-	NodeOperationError,
-	type IExecuteSingleFunctions,
-	type IHttpRequestOptions,
-} from 'n8n-workflow';
-import { isListResponse } from '../../shared/lists';
-import { attioGet } from '../../shared/request';
+import type { IExecuteSingleFunctions, IHttpRequestOptions } from 'n8n-workflow';
+import { getListParentObject } from '../../shared/lists';
 import { invalidValueError, isUuid } from '../../shared/validation';
 import { buildAttributeValues } from '../record/attributes';
-
-// Attio needs the parent record's object, which is fixed by the list, so it's read from there
-async function getParentObject(this: IExecuteSingleFunctions, list: string): Promise<string> {
-	const { name, parent_object: parentObjects } = await attioGet(
-		this,
-		`/lists/${encodeURIComponent(list)}`,
-		isListResponse,
-		'list',
-	);
-
-	// Only legacy lists allow records from more than one object
-	if (parentObjects.length !== 1) {
-		throw new NodeOperationError(this.getNode(), `Can't add records to the list "${name}"`, {
-			description: `The list allows records from ${parentObjects.length === 0 ? 'no objects' : `more than one object (${parentObjects.join(', ')})`}, so the record's object can't be worked out`,
-			itemIndex: this.getItemIndex(),
-		});
-	}
-
-	return parentObjects[0];
-}
 
 export async function buildCreateListEntryBody(
 	this: IExecuteSingleFunctions,
@@ -51,7 +26,8 @@ export async function buildCreateListEntryBody(
 	// An entry can be created without values, so unlike records none are required
 	requestOptions.body = {
 		data: {
-			parent_object: await getParentObject.call(this, list),
+			// Attio needs the parent record's object, which is fixed by the list
+			parent_object: await getListParentObject(this, list),
 			parent_record_id: parentRecordId,
 			entry_values: entryValues,
 		},
