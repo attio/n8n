@@ -35,3 +35,21 @@ export async function buildCreateListEntryBody(
 
 	return requestOptions;
 }
+
+// Checked before the request, so a mistyped ID gets a clear error rather than Attio's 404
+export async function validateEntryId(
+	this: IExecuteSingleFunctions,
+	requestOptions: IHttpRequestOptions,
+): Promise<IHttpRequestOptions> {
+	const entryId = (this.getNodeParameter('entryId') as string).trim();
+	if (!isUuid(entryId)) {
+		throw invalidValueError.call(
+			this,
+			'entry ID',
+			entryId,
+			'Use a list entry ID, for example 2e6e29ea-c4e0-4f44-842d-78a891f8c156',
+		);
+	}
+
+	return requestOptions;
+}

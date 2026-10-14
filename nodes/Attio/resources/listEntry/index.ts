@@ -1,12 +1,12 @@
 import type { INodeProperties } from 'n8n-workflow';
 import { listOptions } from '../../shared/lists';
 import { unwrapResponse } from '../../shared/output';
-import { buildCreateListEntryBody } from './requestBody';
+import { buildCreateListEntryBody, validateEntryId } from './requestBody';
 
 const entriesUrl = '=/lists/{{ encodeURIComponent($parameter.list) }}/entries';
 
 const entryUrl =
-	'=/lists/{{ encodeURIComponent($parameter.list) }}/entries/{{ encodeURIComponent($parameter.entryId) }}';
+	'=/lists/{{ encodeURIComponent($parameter.list) }}/entries/{{ encodeURIComponent($parameter.entryId.trim()) }}';
 
 export const listEntryDescription: INodeProperties[] = [
 	{
@@ -47,6 +47,9 @@ export const listEntryDescription: INodeProperties[] = [
 					request: {
 						method: 'GET',
 						url: entryUrl,
+					},
+					send: {
+						preSend: [validateEntryId],
 					},
 					output: {
 						postReceive: [unwrapResponse],
