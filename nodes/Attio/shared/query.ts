@@ -9,7 +9,8 @@ import {
 	type INodePropertyOptions,
 } from 'n8n-workflow';
 import { isAttributeResponse, type AttributeResponse } from '../resources/record/attributes';
-import { attioGetList, isObject } from './request';
+import { isListResponse } from './lists';
+import { attioGet, attioGetList, isObject } from './request';
 
 type FilterCondition = {
 	attribute: string;
@@ -150,18 +151,54 @@ const referencePaths: Record<Exclude<ReferenceField, 'target_record_id'>, [strin
 };
 
 // Records are queried on an object and list entries on a list. Either is the first step of a
-// filter or sort path, and has the attributes that can be filtered and sorted on
+// filter or sort path
 function getQueryParent(context: ILoadOptionsFunctions | IExecuteSingleFunctions): {
 	parent: string;
-	attributesPath: string;
+	isList: boolean;
 } {
 	const isList = context.getNodeParameter('resource', '') === 'listEntry';
-	const parent = context.getNodeParameter(isList ? 'list' : 'object', '') as string;
+	return { parent: context.getNodeParameter(isList ? 'list' : 'object', '') as string, isList };
+}
 
+// List entries can also be filtered and sorted on the record they belong to, through Attio's
+// parent_record attribute. It isn't one of the list's attributes, so it's added here as a record
+// reference to the list's object, which it acts like
+const parentRecordSlug = 'parent_record';
+
+function parentRecordAttribute(object: string): AttributeResponse {
 	return {
-		parent,
-		attributesPath: `/${isList ? 'lists' : 'objects'}/${encodeURIComponent(parent)}/attributes`,
-	};
+		id: { attribute_id: parentRecordSlug },
+		title: 'Parent Record',
+		api_slug: parentRecordSlug,
+		type: 'record-reference',
+		is_writable: false,
+		is_required: false,
+		is_unique: false,
+		is_multiselect: false,
+		is_default_value_enabled: false,
+		config: { record_reference: { allowed_object_ids: [object] } },
+	} as AttributeResponse;
+}
+
+// The attributes that can be filtered and sorted on
+async function loadQueryAttributes(
+	context: ILoadOptionsFunctions | IExecuteSingleFunctions,
+	parent: string,
+	isList: boolean,
+): Promise<AttributeResponse[]> {
+	const collection = isList ? 'lists' : 'objects';
+	const path = `/${collection}/${encodeURIComponent(parent)}`;
+	if (!isList) return await attioGetList(context, `${path}/attributes`, isAttributeResponse);
+
+	const [attributes, list] = await Promise.all([
+		attioGetList(context, `${path}/attributes`, isAttributeResponse),
+		attioGet(context, path, isListResponse, 'list'),
+	]);
+
+	// Legacy lists for more than one object have no single object to reference
+	return list.parent_object.length === 1
+		? [parentRecordAttribute(list.parent_object[0]), ...attributes]
+		: attributes;
 }
 
 // Attributes can be given by slug or ID, like everywhere else in Attio's API
@@ -187,10 +224,10 @@ async function attributeOptions(
 	this: ILoadOptionsFunctions,
 	include: (attribute: AttributeResponse) => boolean,
 ): Promise<INodePropertyOptions[]> {
-	const { parent, attributesPath } = getQueryParent(this);
+	const { parent, isList } = getQueryParent(this);
 	if (!parent) return [];
 
-	const attributes = await attioGetList(this, attributesPath, isAttributeResponse);
+	const attributes = await loadQueryAttributes(this, parent, isList);
 
 	return attributes
 		.filter(include)
@@ -223,11 +260,11 @@ export async function getQuerySortAttributes(
 async function loadSiblingAttribute(
 	this: ILoadOptionsFunctions,
 ): Promise<AttributeResponse | undefined> {
-	const { parent, attributesPath } = getQueryParent(this);
+	const { parent, isList } = getQueryParent(this);
 	const slug = this.getCurrentNodeParameter('&attribute');
 	if (!parent || typeof slug !== 'string' || !slug) return undefined;
 
-	const attributes = await attioGetList(this, attributesPath, isAttributeResponse);
+	const attributes = await loadQueryAttributes(this, parent, isList);
 	return byKey(attributes).get(slug);
 }
 
@@ -239,12 +276,18 @@ export async function getQueryFilterFields(
 		return fieldOptions(attribute && filterFields[attribute.type]);
 	}
 
-	// Domain and email address are only offered when companies or people can be referenced
+	// Domain and email address are only offered when companies or people can be referenced. The
+	// parent record references its list's object by slug rather than ID
 	const allowedIds = allowedObjectIds(attribute);
 	const objects = await attioGetList(this, '/objects', isObjectResponse);
 	const allowedSlugs = new Set(
 		objects
-			.filter((object) => allowedIds.length === 0 || allowedIds.includes(object.id.object_id))
+			.filter(
+				(object) =>
+					allowedIds.length === 0 ||
+					allowedIds.includes(object.id.object_id) ||
+					(object.api_slug !== null && allowedIds.includes(object.api_slug)),
+			)
 			.map((object) => object.api_slug),
 	);
 
@@ -323,11 +366,25 @@ function toList(value: unknown): unknown[] {
 
 function toReferenceFilter(
 	parent: string,
-	slug: string,
+	attribute: AttributeResponse,
 	field: ReferenceField,
 	operator: string,
 	value: string | string[],
 ): IDataObject {
+	const slug = attribute.api_slug;
+
+	// Attio's guide matches a parent record on its record_id, through a path. Equality uses the
+	// guide's shorthand
+	if (field === 'target_record_id' && slug === parentRecordSlug) {
+		return {
+			path: [
+				[parent, slug],
+				[allowedObjectIds(attribute)[0], 'record_id'],
+			],
+			constraints: { value: operator === '$eq' ? value : { [operator]: value } },
+		};
+	}
+
 	if (field === 'target_record_id') {
 		return { [slug]: { target_record_id: { [operator]: value } } };
 	}
@@ -340,19 +397,22 @@ function toReferenceFilter(
 
 function buildReferenceFilter(
 	parent: string,
-	slug: string,
+	attribute: AttributeResponse,
 	field: ReferenceField,
 	operator: string,
 	rawValue: unknown,
 ): IDataObject {
 	if (operator !== '$in')
-		return toReferenceFilter(parent, slug, field, operator, String(rawValue ?? ''));
+		return toReferenceFilter(parent, attribute, field, operator, String(rawValue ?? ''));
 
 	const values = toList(rawValue).map(String);
-	if (field === 'target_record_id') return toReferenceFilter(parent, slug, field, '$in', values);
+	if (field === 'target_record_id' && attribute.api_slug !== parentRecordSlug) {
+		return toReferenceFilter(parent, attribute, field, '$in', values);
+	}
 
-	// Only record IDs support $in, so domains and email addresses are matched one by one
-	return { $or: values.map((value) => toReferenceFilter(parent, slug, field, '$eq', value)) };
+	// Only record reference IDs support $in, so parent records, domains and email addresses are
+	// matched one by one
+	return { $or: values.map((value) => toReferenceFilter(parent, attribute, field, '$eq', value)) };
 }
 
 function buildConditionsFilter(
@@ -408,7 +468,7 @@ function buildConditionsFilter(
 				);
 			}
 
-			filter = buildReferenceFilter(parent, slug, field, operator, condition.value);
+			filter = buildReferenceFilter(parent, attribute, field, operator, condition.value);
 		} else {
 			const field = resolveField(attribute && filterFields[attribute.type], condition.field);
 			const toValue = (value: unknown) =>
@@ -487,7 +547,7 @@ export async function buildQueryBody(
 	requestOptions: IHttpRequestOptions,
 ): Promise<IHttpRequestOptions> {
 	const body: IDataObject = {};
-	const { parent, attributesPath } = getQueryParent(this);
+	const { parent, isList } = getQueryParent(this);
 	const filterType = this.getNodeParameter('filterType') as string;
 	const conditions =
 		filterType === 'conditions'
@@ -498,7 +558,7 @@ export async function buildQueryBody(
 	// Attribute types decide how values are converted and which fields are used by default
 	const attributes =
 		conditions.length > 0 || sortRules.length > 0
-			? await attioGetList(this, attributesPath, isAttributeResponse)
+			? await loadQueryAttributes(this, parent, isList)
 			: [];
 	const attributesByKey = byKey(attributes);
 
