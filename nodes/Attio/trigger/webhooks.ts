@@ -9,7 +9,7 @@ import { attioGetList, attioRequest, isObject } from '../shared/request';
 
 export type RecordEventType = 'record.created' | 'record.updated' | 'record.deleted';
 
-export type EventType = RecordEventType | 'task.created';
+export type EventType = RecordEventType | 'task.created' | 'call-recording.created';
 
 export type WebhookFilter = {
 	$and: Array<{ field: string; operator: 'equals'; value: string }>;
@@ -37,6 +37,12 @@ export type RecordEvent = {
 export type TaskEvent = {
 	event_type: string;
 	id: { workspace_id: string; task_id: string };
+	actor: { type: string | null; id: string | null };
+};
+
+export type CallRecordingEvent = {
+	event_type: string;
+	id: { workspace_id: string; meeting_id: string; call_recording_id: string };
 	actor: { type: string | null; id: string | null };
 };
 
@@ -71,6 +77,17 @@ function isTaskEvent(value: unknown): value is TaskEvent {
 		typeof value.event_type === 'string' &&
 		isObject(value.id) &&
 		typeof value.id.task_id === 'string' &&
+		isObject(value.actor)
+	);
+}
+
+function isCallRecordingEvent(value: unknown): value is CallRecordingEvent {
+	return (
+		isObject(value) &&
+		typeof value.event_type === 'string' &&
+		isObject(value.id) &&
+		typeof value.id.meeting_id === 'string' &&
+		typeof value.id.call_recording_id === 'string' &&
 		isObject(value.actor)
 	);
 }
@@ -189,4 +206,8 @@ export function getRecordEvents(context: IWebhookFunctions): RecordEvent[] {
 
 export function getTaskEvents(context: IWebhookFunctions): TaskEvent[] {
 	return getEvents(context, isTaskEvent);
+}
+
+export function getCallRecordingEvents(context: IWebhookFunctions): CallRecordingEvent[] {
+	return getEvents(context, isCallRecordingEvent);
 }
