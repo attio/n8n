@@ -37,6 +37,7 @@ Refer to the [n8n community nodes installation guide](https://docs.n8n.io/integr
   - **Create or Update**: add a record to a list, or update its entry if it's already there, using the same fields as Create. Fails if the record is in the list more than once, as there's no way to tell which entry to update. Multi-value entry attributes are overwritten.
   - **Delete**: remove an entry from a list by entry ID. The record itself isn't deleted.
   - **Get**: get a list entry by ID.
+  - **Get Many**: find entries in a list using Attio's query endpoint, with the same filter and sort options as record **Get Many**, on the list's entry attributes. Record reference conditions and sorts start their path from the list. To filter on the parent record, such as finding a company's entry in a list, use a JSON filter with a path that starts with the list and `parent_record`, like `[["sales", "parent_record"], ["companies", "domains"]]`. Entries are returned without their parent record's values.
 - **Note**
   - **Create**: create a note on a record, in plain text or markdown, optionally backdated or linked to a meeting.
   - **Delete**: delete a note by ID.
@@ -57,7 +58,7 @@ Refer to the [n8n community nodes installation guide](https://docs.n8n.io/integr
   - **Get Many**: list tasks, optionally filtered by assignee, completion status or linked record, and sorted by created or completed date.
   - **Update**: change a task's deadline, completion status, assignees or linked records. Attio doesn't allow task content to be edited through the API.
 
-List entry operations need the `list_entry:read-write` and `list_configuration:read` scopes. Searching for a record in the dropdown also needs `record_permission:read` and `object_configuration:read`.
+List entry operations need the `list_entry:read-write` and `list_configuration:read` scopes. Searching for a record in the dropdown, or filtering on record references and parent records, also needs `record_permission:read` and `object_configuration:read`.
 
 Task operations need the `task:read-write`, `object_configuration:read`, `record_permission:read` and `user_management:read` scopes.
 

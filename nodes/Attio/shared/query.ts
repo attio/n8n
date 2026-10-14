@@ -8,8 +8,8 @@ import {
 	type ILoadOptionsFunctions,
 	type INodePropertyOptions,
 } from 'n8n-workflow';
-import { attioGetList, isObject } from '../../shared/request';
-import { isAttributeResponse, type AttributeResponse } from './attributes';
+import { isAttributeResponse, type AttributeResponse } from '../resources/record/attributes';
+import { attioGetList, isObject } from './request';
 
 type FilterCondition = {
 	attribute: string;
@@ -149,8 +149,19 @@ const referencePaths: Record<Exclude<ReferenceField, 'target_record_id'>, [strin
 	email_address: ['people', 'email_addresses'],
 };
 
-function attributesPath(object: string): string {
-	return `/objects/${encodeURIComponent(object)}/attributes`;
+// Records are queried on an object and list entries on a list. Either is the first step of a
+// filter or sort path, and has the attributes that can be filtered and sorted on
+function getQueryParent(context: ILoadOptionsFunctions | IExecuteSingleFunctions): {
+	parent: string;
+	attributesPath: string;
+} {
+	const isList = context.getNodeParameter('resource', '') === 'listEntry';
+	const parent = context.getNodeParameter(isList ? 'list' : 'object', '') as string;
+
+	return {
+		parent,
+		attributesPath: `/${isList ? 'lists' : 'objects'}/${encodeURIComponent(parent)}/attributes`,
+	};
 }
 
 // Attributes can be given by slug or ID, like everywhere else in Attio's API
@@ -176,10 +187,10 @@ async function attributeOptions(
 	this: ILoadOptionsFunctions,
 	include: (attribute: AttributeResponse) => boolean,
 ): Promise<INodePropertyOptions[]> {
-	const object = this.getNodeParameter('object', '') as string;
-	if (!object) return [];
+	const { parent, attributesPath } = getQueryParent(this);
+	if (!parent) return [];
 
-	const attributes = await attioGetList(this, attributesPath(object), isAttributeResponse);
+	const attributes = await attioGetList(this, attributesPath, isAttributeResponse);
 
 	return attributes
 		.filter(include)
@@ -212,11 +223,11 @@ export async function getQuerySortAttributes(
 async function loadSiblingAttribute(
 	this: ILoadOptionsFunctions,
 ): Promise<AttributeResponse | undefined> {
-	const object = this.getNodeParameter('object', '') as string;
+	const { parent, attributesPath } = getQueryParent(this);
 	const slug = this.getCurrentNodeParameter('&attribute');
-	if (!object || typeof slug !== 'string' || !slug) return undefined;
+	if (!parent || typeof slug !== 'string' || !slug) return undefined;
 
-	const attributes = await attioGetList(this, attributesPath(object), isAttributeResponse);
+	const attributes = await attioGetList(this, attributesPath, isAttributeResponse);
 	return byKey(attributes).get(slug);
 }
 
@@ -311,7 +322,7 @@ function toList(value: unknown): unknown[] {
 }
 
 function toReferenceFilter(
-	object: string,
+	parent: string,
 	slug: string,
 	field: ReferenceField,
 	operator: string,
@@ -322,31 +333,31 @@ function toReferenceFilter(
 	}
 
 	return {
-		path: [[object, slug], referencePaths[field]],
+		path: [[parent, slug], referencePaths[field]],
 		constraints: { [field]: { [operator]: value } },
 	};
 }
 
 function buildReferenceFilter(
-	object: string,
+	parent: string,
 	slug: string,
 	field: ReferenceField,
 	operator: string,
 	rawValue: unknown,
 ): IDataObject {
 	if (operator !== '$in')
-		return toReferenceFilter(object, slug, field, operator, String(rawValue ?? ''));
+		return toReferenceFilter(parent, slug, field, operator, String(rawValue ?? ''));
 
 	const values = toList(rawValue).map(String);
-	if (field === 'target_record_id') return toReferenceFilter(object, slug, field, '$in', values);
+	if (field === 'target_record_id') return toReferenceFilter(parent, slug, field, '$in', values);
 
 	// Only record IDs support $in, so domains and email addresses are matched one by one
-	return { $or: values.map((value) => toReferenceFilter(object, slug, field, '$eq', value)) };
+	return { $or: values.map((value) => toReferenceFilter(parent, slug, field, '$eq', value)) };
 }
 
 function buildConditionsFilter(
 	this: IExecuteSingleFunctions,
-	object: string,
+	parent: string,
 	conditions: FilterCondition[],
 	attributesByKey: Map<string, AttributeResponse>,
 ): IDataObject {
@@ -397,7 +408,7 @@ function buildConditionsFilter(
 				);
 			}
 
-			filter = buildReferenceFilter(object, slug, field, operator, condition.value);
+			filter = buildReferenceFilter(parent, slug, field, operator, condition.value);
 		} else {
 			const field = resolveField(attribute && filterFields[attribute.type], condition.field);
 			const toValue = (value: unknown) =>
@@ -439,7 +450,7 @@ function parseJsonFilter(this: IExecuteSingleFunctions): IDataObject {
 
 function buildSorts(
 	this: IExecuteSingleFunctions,
-	object: string,
+	parent: string,
 	rules: SortRule[],
 	attributesByKey: Map<string, AttributeResponse>,
 ): IDataObject[] {
@@ -459,7 +470,7 @@ function buildSorts(
 			// Paths take object IDs as well as slugs
 			return {
 				path: [
-					[object, slug],
+					[parent, slug],
 					[target, 'name'],
 				],
 				direction,
@@ -471,12 +482,12 @@ function buildSorts(
 	});
 }
 
-export async function buildRecordQueryBody(
+export async function buildQueryBody(
 	this: IExecuteSingleFunctions,
 	requestOptions: IHttpRequestOptions,
 ): Promise<IHttpRequestOptions> {
 	const body: IDataObject = {};
-	const object = this.getNodeParameter('object') as string;
+	const { parent, attributesPath } = getQueryParent(this);
 	const filterType = this.getNodeParameter('filterType') as string;
 	const conditions =
 		filterType === 'conditions'
@@ -487,14 +498,14 @@ export async function buildRecordQueryBody(
 	// Attribute types decide how values are converted and which fields are used by default
 	const attributes =
 		conditions.length > 0 || sortRules.length > 0
-			? await attioGetList(this, attributesPath(object), isAttributeResponse)
+			? await attioGetList(this, attributesPath, isAttributeResponse)
 			: [];
 	const attributesByKey = byKey(attributes);
 
 	switch (filterType) {
 		case 'conditions':
 			if (conditions.length > 0) {
-				body.filter = buildConditionsFilter.call(this, object, conditions, attributesByKey);
+				body.filter = buildConditionsFilter.call(this, parent, conditions, attributesByKey);
 			}
 			break;
 		case 'json':
@@ -506,7 +517,7 @@ export async function buildRecordQueryBody(
 	}
 
 	if (sortRules.length > 0) {
-		body.sorts = buildSorts.call(this, object, sortRules, attributesByKey);
+		body.sorts = buildSorts.call(this, parent, sortRules, attributesByKey);
 	}
 
 	// Pagination adds limit and offset to this body
