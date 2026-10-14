@@ -243,7 +243,7 @@ export class AttioTrigger implements INodeType {
 	async webhook(this: IWebhookFunctions): Promise<IWebhookResponseData> {
 		const { webhookSecret } = this.getWorkflowStaticData('node') as WebhookStaticData;
 		if (webhookSecret === undefined || !hasValidSignature(this, webhookSecret)) {
-			this.getResponseObject().status(401).send('Invalid signature');
+			this.getResponseObject().status(401).send('Unauthorized').end();
 			return { noWebhookResponse: true };
 		}
 
