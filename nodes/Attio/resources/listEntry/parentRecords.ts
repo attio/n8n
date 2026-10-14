@@ -1,8 +1,4 @@
-import type {
-	IDataObject,
-	IExecuteSingleFunctions,
-	INodeExecutionData,
-} from 'n8n-workflow';
+import type { IDataObject, IExecuteSingleFunctions, INodeExecutionData } from 'n8n-workflow';
 import { attioRequest, isObject } from '../../shared/request';
 
 type RecordResponse = IDataObject & {
@@ -13,9 +9,8 @@ function isRecordResponse(value: unknown): value is RecordResponse {
 	return isObject(value) && isObject(value.id) && typeof value.id.record_id === 'string';
 }
 
-// Entries only have their parent record's ID, so the record is added as parent_record. Records
-// are fetched with one query per object rather than one request per entry. A page has at most 500
-// entries, which is also the most a query returns
+// Adds each entry's parent record to it as parent_record, as entries only include the record's ID.
+// The records are fetched with one query per object, rather than one request per entry
 export async function addParentRecords(
 	this: IExecuteSingleFunctions,
 	items: INodeExecutionData[],
@@ -48,7 +43,7 @@ export async function addParentRecords(
 		}),
 	);
 
-	// A record the token can't read is left out of the query results, so it's null
+	// Attio leaves out records the credential's access token can't read, so those are null
 	return items.map((item) => ({
 		...item,
 		json: {

@@ -150,8 +150,7 @@ const referencePaths: Record<Exclude<ReferenceField, 'target_record_id'>, [strin
 	email_address: ['people', 'email_addresses'],
 };
 
-// Records are queried on an object and list entries on a list. Either is the first step of a
-// filter or sort path
+// The object being queried for records, or the list being queried for entries
 function getQueryParent(context: ILoadOptionsFunctions | IExecuteSingleFunctions): {
 	parent: string;
 	isList: boolean;
@@ -163,13 +162,12 @@ function getQueryParent(context: ILoadOptionsFunctions | IExecuteSingleFunctions
 // List entries can also be filtered and sorted on the record they belong to, through Attio's
 // parent_record attribute. It isn't one of the list's attributes, so it's added here as a record
 // reference to the list's object, which it acts like
-const parentRecordSlug = 'parent_record';
-
+// @see https://docs.attio.com/rest-api/guides/filtering-and-sorting#paths-and-parents
 function parentRecordAttribute(object: string): AttributeResponse {
 	return {
-		id: { attribute_id: parentRecordSlug },
+		id: { attribute_id: 'parent_record' },
 		title: 'Parent Record',
-		api_slug: parentRecordSlug,
+		api_slug: 'parent_record',
 		type: 'record-reference',
 		is_writable: false,
 		is_required: false,
@@ -373,9 +371,10 @@ function toReferenceFilter(
 ): IDataObject {
 	const slug = attribute.api_slug;
 
-	// Attio's guide matches a parent record on its record_id, through a path. Equality uses the
-	// guide's shorthand
-	if (field === 'target_record_id' && slug === parentRecordSlug) {
+	// A parent record is matched on its record_id, through a path. Equals is sent as
+	// { value: id }, as in Attio's guide, and other operators as { value: { $operator: id } }
+	// @see https://docs.attio.com/rest-api/guides/filtering-and-sorting#paths-and-parents
+	if (field === 'target_record_id' && slug === 'parent_record') {
 		return {
 			path: [
 				[parent, slug],
@@ -406,7 +405,7 @@ function buildReferenceFilter(
 		return toReferenceFilter(parent, attribute, field, operator, String(rawValue ?? ''));
 
 	const values = toList(rawValue).map(String);
-	if (field === 'target_record_id' && attribute.api_slug !== parentRecordSlug) {
+	if (field === 'target_record_id' && attribute.api_slug !== 'parent_record') {
 		return toReferenceFilter(parent, attribute, field, '$in', values);
 	}
 

@@ -240,7 +240,7 @@ export const listEntryDescription: INodeProperties[] = [
 		type: 'boolean',
 		default: true,
 		description:
-			"Whether to add each entry's parent record, with its attribute values, as <code>parent_record</code>. Fetched with one extra request per object for each page of entries.",
+			"Whether to add each entry's parent record, with its attribute values, as <code>parent_record</code>",
 		displayOptions: {
 			show: {
 				resource: ['listEntry'],

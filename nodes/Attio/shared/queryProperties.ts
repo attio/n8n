@@ -2,7 +2,6 @@ import type { INodeProperties } from 'n8n-workflow';
 
 type QueryResource = 'listEntry' | 'record';
 
-// Records are queried on an object and list entries on a list
 const parents: Record<QueryResource, 'list' | 'object'> = {
 	listEntry: 'list',
 	record: 'object',
@@ -14,6 +13,7 @@ const nouns: Record<QueryResource, string> = {
 };
 
 // List attributes vary, so the list example filters on the parent record, as in Attio's guide
+// @see https://docs.attio.com/rest-api/guides/filtering-and-sorting#paths-and-parents
 const jsonFilterDefaults: Record<QueryResource, string> = {
 	listEntry:
 		'{\n  "path": [\n    ["candidates", "parent_record"],\n    ["people", "email_addresses"]\n  ],\n  "constraints": {\n    "email_domain": "apple.com"\n  }\n}',
