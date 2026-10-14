@@ -29,7 +29,8 @@ async function getMeeting(
 	}
 }
 
-// The recording includes its transcript, and its meeting when includeMeeting is set
+// The transcript is part of the recording. The meeting is a separate request for the calendar
+// event it was recorded in, with its title, times and participants
 export async function getCallRecording(
 	context: IWebhookFunctions,
 	event: CallRecordingEvent,

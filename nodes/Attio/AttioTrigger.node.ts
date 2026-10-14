@@ -56,7 +56,6 @@ function getAttribute(context: IHookFunctions | IWebhookFunctions, eventType: Ev
 	return context.getNodeParameter('attribute', '') as string;
 }
 
-// Task and call recording events aren't filtered, so only record events have a filter
 function getFilter(context: IHookFunctions, eventType: EventType): WebhookFilter | null {
 	if (eventType === 'task.created' || eventType === 'call-recording.created') return null;
 
