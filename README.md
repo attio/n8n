@@ -33,7 +33,7 @@ Refer to the [n8n community nodes installation guide](https://docs.n8n.io/integr
 ## Operations
 
 - **List Entry**
-  - **Create**: add a record to a list. The record must belong to the object the list is for, such as people or companies, which is read from the list. Choose the record from a searchable dropdown, which matches names, domains and email addresses and shows up to 25 results, or give its ID. Entry attributes load from the list, or can be mapped automatically from input fields named after attribute slugs. They're optional, so a record can be added without any. A record can be added to the same list more than once.
+  - **Create**: add a record to a list. The record must belong to the object the list is for, such as people or companies, which is read from the list. Give the record's ID, or switch to **From list** to search all records of the list's object (not just those already in the list) by name, domain or email address, showing up to 25 results. Entry attributes load from the list, or can be mapped automatically from input fields named after attribute slugs. They're optional, so a record can be added without any. A record can be added to the same list more than once.
   - **Get**: get a list entry by ID.
 - **Note**
   - **Create**: create a note on a record, in plain text or markdown, optionally backdated or linked to a meeting.

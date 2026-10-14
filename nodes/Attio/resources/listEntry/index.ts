@@ -79,20 +79,10 @@ export const listEntryDescription: INodeProperties[] = [
 		name: 'parentRecord',
 		type: 'resourceLocator',
 		required: true,
-		default: { mode: 'list', value: '' },
+		default: { mode: 'id', value: '' },
 		description:
-			'Record to add to the list, from the object the list is for. A record can be added to the same list more than once.',
+			'Record to add to the list. "From list" searches all records of the object the list is for, not records already in the list. A record can be added to the same list more than once.',
 		modes: [
-			{
-				displayName: 'From List',
-				name: 'list',
-				type: 'list',
-				placeholder: 'Select a record...',
-				typeOptions: {
-					searchListMethod: 'searchListParentRecords',
-					searchable: true,
-				},
-			},
 			{
 				displayName: 'By ID',
 				name: 'id',
@@ -108,6 +98,17 @@ export const listEntryDescription: INodeProperties[] = [
 						},
 					},
 				],
+			},
+			{
+				// The editor always labels this mode "From list", and only shows the search for a mode named list
+				displayName: 'From List',
+				name: 'list',
+				type: 'list',
+				placeholder: 'Search all records by name, domain or email...',
+				typeOptions: {
+					searchListMethod: 'searchListParentRecords',
+					searchable: true,
+				},
 			},
 		],
 		displayOptions: {
