@@ -1,15 +1,14 @@
 import {
 	NodeConnectionTypes,
 	NodeOperationError,
-	type IDataObject,
 	type IHookFunctions,
 	type INodeType,
 	type INodeTypeDescription,
 	type IWebhookFunctions,
 	type IWebhookResponseData,
 } from 'n8n-workflow';
-import { attioGet, isObject } from './shared/request';
 import { getTriggerAttributes, getTriggerObjects } from './trigger/loadOptions';
+import { getRecord } from './trigger/records';
 import {
 	createWebhook,
 	deleteWebhook,
@@ -65,16 +64,6 @@ function isSubscribedEvent(
 		event.event_type === eventType &&
 		event.id.object_id === object &&
 		(attribute === '' || event.id.attribute_id === attribute)
-	);
-}
-
-async function getRecord(context: IWebhookFunctions, event: RecordEvent): Promise<IDataObject> {
-	const { object_id, record_id } = event.id;
-	return await attioGet(
-		context,
-		`/objects/${encodeURIComponent(object_id)}/records/${encodeURIComponent(record_id)}`,
-		(data): data is IDataObject => isObject(data),
-		'record',
 	);
 }
 
@@ -162,6 +151,19 @@ export class AttioTrigger implements INodeType {
 					},
 					hide: {
 						object: [''],
+					},
+				},
+			},
+			{
+				displayName: 'Include List Entries',
+				name: 'includeListEntries',
+				type: 'boolean',
+				default: false,
+				description:
+					"Whether to add the record's entries across all lists, with each entry's list and ID but not its values. Costs an extra request per record.",
+				displayOptions: {
+					show: {
+						event: ['record.created', 'record.updated'],
 					},
 				},
 			},
@@ -259,8 +261,9 @@ export class AttioTrigger implements INodeType {
 		const recordEvents = [...new Map(events.map((event) => [event.id.record_id, event])).values()];
 		if (recordEvents.length === 0) return {};
 
+		const includeListEntries = this.getNodeParameter('includeListEntries', false) as boolean;
 		const records = await Promise.all(
-			recordEvents.map(async (event) => await getRecord(this, event)),
+			recordEvents.map(async (event) => await getRecord(this, event, includeListEntries)),
 		);
 		return { workflowData: [this.helpers.returnJsonArray(records)] };
 	}
