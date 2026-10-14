@@ -109,7 +109,6 @@ async function expandTask(
 	};
 }
 
-// Matches the output of the action node's Task Get, unless members are passed to expand it
 export async function getTask(
 	context: IWebhookFunctions,
 	event: TaskEvent,
