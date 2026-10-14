@@ -66,6 +66,8 @@ Starts a workflow from an Attio webhook, which the trigger creates when the work
 - **Record Updated**: values on a record of the chosen object are updated, optionally only for one attribute. Outputs the record once per delivery, even if several attributes changed.
 - **Include List Entries** (Record Created and Record Updated): adds the record's entries across all lists as `list_entries`, with each entry's list and ID but not its values. Use List Entry **Get** for the values. It's empty if the access token can't read lists.
 - **Record Deleted**: a record is deleted from the chosen object. Outputs the event, with the deleted record's IDs and the actor that deleted it.
+- **Task Created**: a task is created. Outputs the task, as Task **Get** does.
+- **Include Linked Records and Members** (Task Created): adds the full record to each linked record as `target_record`, and the workspace member to each assignee as `referenced_actor` and to the creator as `created_by_actor.workspace_member`. A linked record that's since been deleted has no `target_record`.
 
 List entry operations need the `list_entry:read-write` and `list_configuration:read` scopes. Searching for a record in the dropdown, filtering on record references and parent records, or including parent records in Get Many, also needs `record_permission:read` and `object_configuration:read`.
 

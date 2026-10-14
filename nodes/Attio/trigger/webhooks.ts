@@ -9,6 +9,8 @@ import { attioGetList, attioRequest, isObject } from '../shared/request';
 
 export type RecordEventType = 'record.created' | 'record.updated' | 'record.deleted';
 
+export type EventType = RecordEventType | 'task.created';
+
 export type WebhookFilter = {
 	$and: Array<{ field: string; operator: 'equals'; value: string }>;
 };
@@ -29,6 +31,12 @@ export type RecordEvent = {
 		record_id: string;
 		attribute_id?: string;
 	};
+	actor: { type: string | null; id: string | null };
+};
+
+export type TaskEvent = {
+	event_type: string;
+	id: { workspace_id: string; task_id: string };
 	actor: { type: string | null; id: string | null };
 };
 
@@ -53,6 +61,16 @@ function isRecordEvent(value: unknown): value is RecordEvent {
 		isObject(value.id) &&
 		typeof value.id.object_id === 'string' &&
 		typeof value.id.record_id === 'string' &&
+		isObject(value.actor)
+	);
+}
+
+function isTaskEvent(value: unknown): value is TaskEvent {
+	return (
+		isObject(value) &&
+		typeof value.event_type === 'string' &&
+		isObject(value.id) &&
+		typeof value.id.task_id === 'string' &&
 		isObject(value.actor)
 	);
 }
@@ -124,8 +142,8 @@ async function deleteWebhooksTargeting(context: IHookFunctions, targetUrl: strin
 export async function createWebhook(
 	context: IHookFunctions,
 	targetUrl: string,
-	eventType: RecordEventType,
-	filter: WebhookFilter,
+	eventType: EventType,
+	filter: WebhookFilter | null,
 ): Promise<CreatedWebhookResponse> {
 	await deleteWebhooksTargeting(context, targetUrl);
 
@@ -160,7 +178,15 @@ export function hasValidSignature(context: IWebhookFunctions, secret: string): b
 }
 
 // Attio batches events, so a delivery can hold several
-export function getRecordEvents(context: IWebhookFunctions): RecordEvent[] {
+function getEvents<T>(context: IWebhookFunctions, isEvent: (value: unknown) => value is T): T[] {
 	const { events } = context.getBodyData();
-	return Array.isArray(events) ? events.filter(isRecordEvent) : [];
+	return Array.isArray(events) ? events.filter(isEvent) : [];
+}
+
+export function getRecordEvents(context: IWebhookFunctions): RecordEvent[] {
+	return getEvents(context, isRecordEvent);
+}
+
+export function getTaskEvents(context: IWebhookFunctions): TaskEvent[] {
+	return getEvents(context, isTaskEvent);
 }

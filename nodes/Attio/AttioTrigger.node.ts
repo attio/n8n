@@ -9,12 +9,15 @@ import {
 } from 'n8n-workflow';
 import { getTriggerAttributes, getTriggerObjects } from './trigger/loadOptions';
 import { getRecord } from './trigger/records';
+import { getTask, getWorkspaceMembers } from './trigger/tasks';
 import {
 	createWebhook,
 	deleteWebhook,
 	getRecordEvents,
+	getTaskEvents,
 	getWebhook,
 	hasValidSignature,
+	type EventType,
 	type RecordEvent,
 	type RecordEventType,
 	type WebhookFilter,
@@ -42,13 +45,30 @@ function assertHttps(context: IHookFunctions, url: string): void {
 	});
 }
 
-function getEventType(context: IHookFunctions | IWebhookFunctions): RecordEventType {
-	return context.getNodeParameter('event') as RecordEventType;
+function getEventType(context: IHookFunctions | IWebhookFunctions): EventType {
+	return context.getNodeParameter('event') as EventType;
 }
 
-function getAttribute(context: IHookFunctions | IWebhookFunctions, eventType: RecordEventType) {
+function getAttribute(context: IHookFunctions | IWebhookFunctions, eventType: EventType) {
 	if (eventType !== 'record.updated') return '';
 	return context.getNodeParameter('attribute', '') as string;
+}
+
+// Task events aren't filtered, so only record events have a filter
+function getFilter(context: IHookFunctions, eventType: EventType): WebhookFilter | null {
+	if (eventType === 'task.created') return null;
+
+	const object = context.getNodeParameter('object') as string;
+	const attribute = getAttribute(context, eventType);
+
+	return {
+		$and: [
+			{ field: 'id.object_id', operator: 'equals', value: object },
+			...(attribute !== ''
+				? [{ field: 'id.attribute_id', operator: 'equals' as const, value: attribute }]
+				: []),
+		],
+	};
 }
 
 function matchesFilter(
@@ -117,6 +137,11 @@ export class AttioTrigger implements INodeType {
 						description:
 							'Triggers when values on a record, such as a person, company or deal, are updated',
 					},
+					{
+						name: 'Task Created',
+						value: 'task.created',
+						description: 'Triggers when a task is created',
+					},
 				],
 				default: 'record.created',
 			},
@@ -130,6 +155,11 @@ export class AttioTrigger implements INodeType {
 					'The object to watch for record events, such as People or Companies. Choose from the list, or specify an ID using an <a href="https://docs.n8n.io/code/expressions/">expression</a>.',
 				typeOptions: {
 					loadOptionsMethod: 'getTriggerObjects',
+				},
+				displayOptions: {
+					show: {
+						event: ['record.created', 'record.deleted', 'record.updated'],
+					},
 				},
 			},
 			{
@@ -162,6 +192,19 @@ export class AttioTrigger implements INodeType {
 				displayOptions: {
 					show: {
 						event: ['record.created', 'record.updated'],
+					},
+				},
+			},
+			{
+				displayName: 'Include Linked Records and Members',
+				name: 'includeLinkedRecordsAndMembers',
+				type: 'boolean',
+				default: false,
+				description:
+					"Whether to add each linked record's record, and the workspace members who are assigned to or created the task. Costs an extra request per linked record, and one for the members.",
+				displayOptions: {
+					show: {
+						event: ['task.created'],
 					},
 				},
 			},
@@ -198,17 +241,7 @@ export class AttioTrigger implements INodeType {
 
 			async create(this: IHookFunctions): Promise<boolean> {
 				const eventType = getEventType(this);
-				const object = this.getNodeParameter('object') as string;
-				const attribute = getAttribute(this, eventType);
-
-				const filter: WebhookFilter = {
-					$and: [
-						{ field: 'id.object_id', operator: 'equals', value: object },
-						...(attribute !== ''
-							? [{ field: 'id.attribute_id', operator: 'equals' as const, value: attribute }]
-							: []),
-					],
-				};
+				const filter = getFilter(this, eventType);
 
 				const webhookUrl = getWebhookUrl(this);
 				assertHttps(this, webhookUrl);
@@ -242,6 +275,20 @@ export class AttioTrigger implements INodeType {
 		}
 
 		const eventType = getEventType(this);
+
+		if (eventType === 'task.created') {
+			const events = getTaskEvents(this);
+			if (events.length === 0) return {};
+
+			const expand = this.getNodeParameter('includeLinkedRecordsAndMembers', false) as boolean;
+			// Members are fetched once for every task in the delivery
+			const members = expand ? await getWorkspaceMembers(this) : undefined;
+			const tasks = await Promise.all(
+				events.map(async (event) => await getTask(this, event, members)),
+			);
+			return { workflowData: [this.helpers.returnJsonArray(tasks)] };
+		}
+
 		const events = getRecordEvents(this).filter((event) => matchesFilter(this, eventType, event));
 
 		if (eventType === 'record.deleted') {
