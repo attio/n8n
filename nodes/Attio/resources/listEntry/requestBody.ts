@@ -3,7 +3,8 @@ import { getListParentObject } from '../../shared/lists';
 import { invalidValueError, isUuid } from '../../shared/validation';
 import { buildAttributeValues } from '../record/attributes';
 
-export async function buildCreateListEntryBody(
+// Create and Create or Update take the same body
+export async function buildListEntryBody(
 	this: IExecuteSingleFunctions,
 	requestOptions: IHttpRequestOptions,
 ): Promise<IHttpRequestOptions> {
