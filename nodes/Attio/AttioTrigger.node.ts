@@ -51,7 +51,7 @@ function getAttribute(context: IHookFunctions | IWebhookFunctions, eventType: Re
 	return context.getNodeParameter('attribute', '') as string;
 }
 
-function isSubscribedEvent(
+function matchesFilter(
 	context: IWebhookFunctions,
 	eventType: RecordEventType,
 	event: RecordEvent,
@@ -59,12 +59,10 @@ function isSubscribedEvent(
 	const object = context.getNodeParameter('object') as string;
 	const attribute = getAttribute(context, eventType);
 
-	// Attio filters events when sending them, but its test deliveries ignore filters
-	return (
-		event.event_type === eventType &&
-		event.id.object_id === object &&
-		(attribute === '' || event.id.attribute_id === attribute)
-	);
+	// The webhook's filter already limits events to this object and attribute, but test events
+	// sent from Attio's developer settings skip the filter, so they're checked again here. Each
+	// webhook subscribes to a single event type, so that doesn't need checking
+	return event.id.object_id === object && (attribute === '' || event.id.attribute_id === attribute);
 }
 
 export class AttioTrigger implements INodeType {
@@ -129,7 +127,7 @@ export class AttioTrigger implements INodeType {
 				required: true,
 				default: '',
 				description:
-					'The object whose records to watch. Choose from the list, or specify an ID using an <a href="https://docs.n8n.io/code/expressions/">expression</a>.',
+					'The object to watch for record events, such as People or Companies. Choose from the list, or specify an ID using an <a href="https://docs.n8n.io/code/expressions/">expression</a>.',
 				typeOptions: {
 					loadOptionsMethod: 'getTriggerObjects',
 				},
@@ -184,11 +182,7 @@ export class AttioTrigger implements INodeType {
 				if (staticData.webhookId === undefined) return false;
 
 				const webhook = await getWebhook(this, staticData.webhookId);
-				if (webhook?.status === 'inactive') {
-					// Attio stops delivering to inactive webhooks, and would reject a replacement as a
-					// duplicate while it exists
-					await deleteWebhook(this, staticData.webhookId);
-				}
+				// Attio stops delivering to inactive webhooks. create() replaces them
 				if (
 					webhook === undefined ||
 					webhook.status === 'inactive' ||
@@ -248,9 +242,7 @@ export class AttioTrigger implements INodeType {
 		}
 
 		const eventType = getEventType(this);
-		const events = getRecordEvents(this).filter((event) =>
-			isSubscribedEvent(this, eventType, event),
-		);
+		const events = getRecordEvents(this).filter((event) => matchesFilter(this, eventType, event));
 
 		if (eventType === 'record.deleted') {
 			if (events.length === 0) return {};
