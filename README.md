@@ -140,13 +140,17 @@ Then select **Execute step** on the trigger and make a matching change in Attio,
 
 ### Releasing
 
-n8n only verifies community nodes published from GitHub Actions with [npm provenance](https://docs.npmjs.com/generating-provenance-statements), so packages are never published from a laptop. From an up-to-date `main` with a clean working tree, run:
+n8n only verifies community nodes published from GitHub Actions with [npm provenance](https://docs.npmjs.com/generating-provenance-statements), so every release goes through a reviewed pull request and nothing is published from a laptop.
 
-```sh
-pnpm run release
-```
+1. In a pull request, bump the version and add an entry for it to `CHANGELOG.md`:
 
-This lints, builds, prompts for the version bump, updates `CHANGELOG.md`, then commits, tags, pushes and creates a GitHub release. The tag push runs [`publish.yml`](.github/workflows/publish.yml), which publishes `@attio/n8n-nodes-attio` to npm with provenance. The workflow authenticates with npm [Trusted Publishing](https://docs.npmjs.com/trusted-publishers), configured on npmjs.com for the `attio/n8n` repository and the `publish.yml` workflow.
+   ```sh
+   npm version minor --no-git-tag-version   # or patch, major, prerelease
+   ```
+
+2. Once the pull request is reviewed and merged, [`publish.yml`](.github/workflows/publish.yml) publishes the new version of `@attio/n8n-nodes-attio` to npm with provenance, then tags the merge commit and creates a GitHub release. Prereleases such as `1.0.0-rc.1` are published under npm's `next` dist-tag.
+
+The workflow authenticates with npm [Trusted Publishing](https://docs.npmjs.com/trusted-publishers), configured on npmjs.com for the `attio/n8n` repository, the `publish.yml` workflow and the `npm` environment. Don't run `pnpm run release` locally: it's the command the workflow runs to publish, and on a laptop it tries to tag and push to `main` directly.
 
 ## Resources
 
