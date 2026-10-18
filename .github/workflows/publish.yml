@@ -1,0 +1,53 @@
+name: Publish
+
+# n8n requires community nodes to be published from GitHub Actions with npm provenance.
+# `pnpm run release` locally bumps the version, tags and pushes; the tag push runs this workflow.
+on:
+  push:
+    tags:
+      # release-it tags without a "v" prefix, e.g. 0.2.0 or 1.0.0-rc.1.
+      - '*.*.*'
+
+jobs:
+  publish:
+    name: Publish to npm
+    runs-on: ubuntu-latest
+
+    permissions:
+      # Mints the OIDC token used for Trusted Publishing and the provenance attestation.
+      id-token: write
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up pnpm
+        # Version comes from the packageManager field in package.json.
+        uses: pnpm/action-setup@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: '.nvmrc'
+          # Writes an .npmrc for registry.npmjs.org that npm publish authenticates against.
+          registry-url: 'https://registry.npmjs.org'
+          # No dependency cache, so a poisoned cache can't leak into a published build.
+
+      - name: Upgrade npm
+        # Trusted Publishing needs npm 11.5.1 or later, newer than some Node 24 releases bundle.
+        run: 'npm install -g npm@^11.5.1'
+
+      - name: Check tag matches package version
+        run: |
+          version="$(node -p "require('./package.json').version")"
+          if [ "$GITHUB_REF_NAME" != "$version" ]; then
+            echo "::error::Tag $GITHUB_REF_NAME does not match package.json version $version"
+            exit 1
+          fi
+
+      - name: Install dependencies
+        run: 'pnpm install --frozen-lockfile'
+
+      - name: Publish
+        # In GitHub Actions, n8n-node release runs lint and build, then npm publish with provenance.
+        run: 'pnpm run release'
