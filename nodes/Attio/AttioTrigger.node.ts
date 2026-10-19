@@ -8,19 +8,26 @@ import {
 	type IWebhookResponseData,
 } from 'n8n-workflow';
 import { getCallRecording } from './trigger/callRecordings';
-import { getTriggerAttributes, getTriggerObjects } from './trigger/loadOptions';
+import { getDeletedListEntry, getListEntry } from './trigger/listEntries';
+import {
+	getTriggerAttributes,
+	getTriggerListAttributes,
+	getTriggerLists,
+	getTriggerObjects,
+} from './trigger/loadOptions';
 import { getRecord } from './trigger/records';
 import { getTask, getWorkspaceMembers } from './trigger/tasks';
 import {
 	createWebhook,
 	deleteWebhook,
 	getCallRecordingEvents,
+	getListEntryEvents,
 	getRecordEvents,
 	getTaskEvents,
 	getWebhook,
 	hasValidSignature,
 	type EventType,
-	type RecordEvent,
+	type ListEntryEventType,
 	type RecordEventType,
 	type WebhookFilter,
 } from './trigger/webhooks';
@@ -51,20 +58,39 @@ function getEventType(context: IHookFunctions | IWebhookFunctions): EventType {
 	return context.getNodeParameter('event') as EventType;
 }
 
+function isListEntryEventType(eventType: EventType): eventType is ListEntryEventType {
+	return (
+		eventType === 'list-entry.created' ||
+		eventType === 'list-entry.updated' ||
+		eventType === 'list-entry.deleted'
+	);
+}
+
+// The object or list chosen to watch, which events match on by ID
+function getScope(
+	context: IHookFunctions | IWebhookFunctions,
+	eventType: RecordEventType | ListEntryEventType,
+): string {
+	return context.getNodeParameter(isListEntryEventType(eventType) ? 'list' : 'object') as string;
+}
+
 function getAttribute(context: IHookFunctions | IWebhookFunctions, eventType: EventType) {
-	if (eventType !== 'record.updated') return '';
-	return context.getNodeParameter('attribute', '') as string;
+	if (eventType === 'record.updated') return context.getNodeParameter('attribute', '') as string;
+	if (eventType === 'list-entry.updated') {
+		return context.getNodeParameter('listAttribute', '') as string;
+	}
+	return '';
 }
 
 function getFilter(context: IHookFunctions, eventType: EventType): WebhookFilter | null {
 	if (eventType === 'task.created' || eventType === 'call-recording.created') return null;
 
-	const object = context.getNodeParameter('object') as string;
+	const scopeField = isListEntryEventType(eventType) ? 'id.list_id' : 'id.object_id';
 	const attribute = getAttribute(context, eventType);
 
 	return {
 		$and: [
-			{ field: 'id.object_id', operator: 'equals', value: object },
+			{ field: scopeField, operator: 'equals', value: getScope(context, eventType) },
 			...(attribute !== ''
 				? [{ field: 'id.attribute_id', operator: 'equals' as const, value: attribute }]
 				: []),
@@ -74,16 +100,18 @@ function getFilter(context: IHookFunctions, eventType: EventType): WebhookFilter
 
 function matchesFilter(
 	context: IWebhookFunctions,
-	eventType: RecordEventType,
-	event: RecordEvent,
+	eventType: RecordEventType | ListEntryEventType,
+	scopeId: string,
+	attributeId: string | undefined,
 ): boolean {
-	const object = context.getNodeParameter('object') as string;
 	const attribute = getAttribute(context, eventType);
 
-	// The webhook's filter already limits events to this object and attribute, but test events
-	// sent from Attio's developer settings skip the filter, so they're checked again here. Each
-	// webhook subscribes to a single event type, so that doesn't need checking
-	return event.id.object_id === object && (attribute === '' || event.id.attribute_id === attribute);
+	// The webhook's filter already limits events to this object or list and attribute, but test
+	// events sent from Attio's developer settings skip the filter, so they're checked again here.
+	// Each webhook subscribes to a single event type, so that doesn't need checking
+	return (
+		scopeId === getScope(context, eventType) && (attribute === '' || attributeId === attribute)
+	);
 }
 
 export class AttioTrigger implements INodeType {
@@ -126,6 +154,22 @@ export class AttioTrigger implements INodeType {
 						name: 'Call Recording Created',
 						value: 'call-recording.created',
 						description: 'Triggers when a call recording finishes processing',
+					},
+					{
+						name: 'List Entry Created',
+						value: 'list-entry.created',
+						description:
+							'Triggers when a record, such as a person, company or deal, is added to a list',
+					},
+					{
+						name: 'List Entry Deleted',
+						value: 'list-entry.deleted',
+						description: 'Triggers when a record is removed from a list',
+					},
+					{
+						name: 'List Entry Updated',
+						value: 'list-entry.updated',
+						description: 'Triggers when values on a list entry are updated',
 					},
 					{
 						name: 'Record Created',
@@ -189,6 +233,56 @@ export class AttioTrigger implements INodeType {
 				},
 			},
 			{
+				displayName: 'List Name or ID',
+				name: 'list',
+				type: 'options',
+				required: true,
+				default: '',
+				description:
+					'The list to watch for entry events. Choose from the list, or specify an ID using an <a href="https://docs.n8n.io/code/expressions/">expression</a>.',
+				typeOptions: {
+					loadOptionsMethod: 'getTriggerLists',
+				},
+				displayOptions: {
+					show: {
+						event: ['list-entry.created', 'list-entry.deleted', 'list-entry.updated'],
+					},
+				},
+			},
+			{
+				displayName: 'Attribute Name or ID',
+				name: 'listAttribute',
+				type: 'options',
+				default: '',
+				description:
+					'Only trigger when this list attribute is updated. Choose from the list, or specify an ID using an <a href="https://docs.n8n.io/code/expressions/">expression</a>.',
+				typeOptions: {
+					loadOptionsMethod: 'getTriggerListAttributes',
+					loadOptionsDependsOn: ['list'],
+				},
+				displayOptions: {
+					show: {
+						event: ['list-entry.updated'],
+					},
+					hide: {
+						list: [''],
+					},
+				},
+			},
+			{
+				displayName: 'Include Parent Record',
+				name: 'includeParentRecord',
+				type: 'boolean',
+				default: true,
+				description:
+					"Whether to add the entry's parent record, with its attribute values, as <code>parent_record</code>. Costs an extra request per entry.",
+				displayOptions: {
+					show: {
+						event: ['list-entry.created', 'list-entry.deleted', 'list-entry.updated'],
+					},
+				},
+			},
+			{
 				displayName: 'Include List Entries',
 				name: 'includeListEntries',
 				type: 'boolean',
@@ -233,6 +327,8 @@ export class AttioTrigger implements INodeType {
 	methods = {
 		loadOptions: {
 			getTriggerAttributes,
+			getTriggerListAttributes,
+			getTriggerLists,
 			getTriggerObjects,
 		},
 	};
@@ -319,7 +415,33 @@ export class AttioTrigger implements INodeType {
 			return { workflowData: [this.helpers.returnJsonArray(callRecordings)] };
 		}
 
-		const events = getRecordEvents(this).filter((event) => matchesFilter(this, eventType, event));
+		if (isListEntryEventType(eventType)) {
+			const events = getListEntryEvents(this).filter((event) =>
+				matchesFilter(this, eventType, event.id.list_id, event.id.attribute_id),
+			);
+			const includeParentRecord = this.getNodeParameter('includeParentRecord', true) as boolean;
+
+			if (eventType === 'list-entry.deleted') {
+				if (events.length === 0) return {};
+				const entries = await Promise.all(
+					events.map(async (event) => await getDeletedListEntry(this, event, includeParentRecord)),
+				);
+				return { workflowData: [this.helpers.returnJsonArray(entries)] };
+			}
+
+			// Updating several attributes at once sends an event for each, so each entry is fetched once
+			const entryEvents = [...new Map(events.map((event) => [event.id.entry_id, event])).values()];
+			if (entryEvents.length === 0) return {};
+
+			const entries = await Promise.all(
+				entryEvents.map(async (event) => await getListEntry(this, event, includeParentRecord)),
+			);
+			return { workflowData: [this.helpers.returnJsonArray(entries)] };
+		}
+
+		const events = getRecordEvents(this).filter((event) =>
+			matchesFilter(this, eventType, event.id.object_id, event.id.attribute_id),
+		);
 
 		if (eventType === 'record.deleted') {
 			if (events.length === 0) return {};
