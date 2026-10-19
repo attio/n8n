@@ -7,9 +7,11 @@ import {
 	type IWebhookFunctions,
 	type IWebhookResponseData,
 } from 'n8n-workflow';
+import { getActivityRecord } from './trigger/activities';
 import { getCallRecording } from './trigger/callRecordings';
 import { getDeletedListEntry, getListEntry } from './trigger/listEntries';
 import {
+	getTriggerActivities,
 	getTriggerAttributes,
 	getTriggerListAttributes,
 	getTriggerLists,
@@ -20,6 +22,7 @@ import { getTask, getWorkspaceMembers } from './trigger/tasks';
 import {
 	createWebhook,
 	deleteWebhook,
+	getActivityRecordEvents,
 	getCallRecordingEvents,
 	getListEntryEvents,
 	getRecordEvents,
@@ -84,6 +87,17 @@ function getAttribute(context: IHookFunctions | IWebhookFunctions, eventType: Ev
 
 function getFilter(context: IHookFunctions, eventType: EventType): WebhookFilter | null {
 	if (eventType === 'task.created' || eventType === 'call-recording.created') return null;
+	if (eventType === 'activity-record.created') {
+		return {
+			$and: [
+				{
+					field: 'id.activity_id',
+					operator: 'equals',
+					value: context.getNodeParameter('activity') as string,
+				},
+			],
+		};
+	}
 
 	const scopeField = isListEntryEventType(eventType) ? 'id.list_id' : 'id.object_id';
 	const attribute = getAttribute(context, eventType);
@@ -151,6 +165,11 @@ export class AttioTrigger implements INodeType {
 				required: true,
 				options: [
 					{
+						name: 'Activity Created',
+						value: 'activity-record.created',
+						description: 'Triggers when an activity, such as a phone call, is logged',
+					},
+					{
 						name: 'Call Recording Created',
 						value: 'call-recording.created',
 						description: 'Triggers when a call recording finishes processing',
@@ -194,6 +213,23 @@ export class AttioTrigger implements INodeType {
 					},
 				],
 				default: 'record.created',
+			},
+			{
+				displayName: 'Activity Name or ID',
+				name: 'activity',
+				type: 'options',
+				required: true,
+				default: '',
+				description:
+					'The activity to watch, such as Phone call. Choose from the list, or specify an ID using an <a href="https://docs.n8n.io/code/expressions/">expression</a>.',
+				typeOptions: {
+					loadOptionsMethod: 'getTriggerActivities',
+				},
+				displayOptions: {
+					show: {
+						event: ['activity-record.created'],
+					},
+				},
 			},
 			{
 				displayName: 'Object Name or ID',
@@ -326,6 +362,7 @@ export class AttioTrigger implements INodeType {
 
 	methods = {
 		loadOptions: {
+			getTriggerActivities,
 			getTriggerAttributes,
 			getTriggerListAttributes,
 			getTriggerLists,
@@ -402,6 +439,20 @@ export class AttioTrigger implements INodeType {
 				events.map(async (event) => await getTask(this, event, members)),
 			);
 			return { workflowData: [this.helpers.returnJsonArray(tasks)] };
+		}
+
+		if (eventType === 'activity-record.created') {
+			// Test events sent from Attio's developer settings skip the webhook's filter
+			const activity = this.getNodeParameter('activity') as string;
+			const events = getActivityRecordEvents(this).filter(
+				(event) => event.id.activity_id === activity,
+			);
+			if (events.length === 0) return {};
+
+			const activityRecords = await Promise.all(
+				events.map(async (event) => await getActivityRecord(this, event)),
+			);
+			return { workflowData: [this.helpers.returnJsonArray(activityRecords)] };
 		}
 
 		if (eventType === 'call-recording.created') {

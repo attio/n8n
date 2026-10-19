@@ -15,7 +15,8 @@ export type EventType =
 	| RecordEventType
 	| ListEntryEventType
 	| 'task.created'
-	| 'call-recording.created';
+	| 'call-recording.created'
+	| 'activity-record.created';
 
 export type WebhookFilter = {
 	$and: Array<{ field: string; operator: 'equals'; value: string }>;
@@ -62,6 +63,12 @@ export type TaskEvent = {
 export type CallRecordingEvent = {
 	event_type: string;
 	id: { workspace_id: string; meeting_id: string; call_recording_id: string };
+	actor: { type: string | null; id: string | null };
+};
+
+export type ActivityRecordEvent = {
+	event_type: string;
+	id: { workspace_id: string; activity_id: string; record_id: string };
 	actor: { type: string | null; id: string | null };
 };
 
@@ -120,6 +127,17 @@ function isCallRecordingEvent(value: unknown): value is CallRecordingEvent {
 		isObject(value.id) &&
 		typeof value.id.meeting_id === 'string' &&
 		typeof value.id.call_recording_id === 'string' &&
+		isObject(value.actor)
+	);
+}
+
+function isActivityRecordEvent(value: unknown): value is ActivityRecordEvent {
+	return (
+		isObject(value) &&
+		typeof value.event_type === 'string' &&
+		isObject(value.id) &&
+		typeof value.id.activity_id === 'string' &&
+		typeof value.id.record_id === 'string' &&
 		isObject(value.actor)
 	);
 }
@@ -246,4 +264,8 @@ export function getTaskEvents(context: IWebhookFunctions): TaskEvent[] {
 
 export function getCallRecordingEvents(context: IWebhookFunctions): CallRecordingEvent[] {
 	return getEvents(context, isCallRecordingEvent);
+}
+
+export function getActivityRecordEvents(context: IWebhookFunctions): ActivityRecordEvent[] {
+	return getEvents(context, isActivityRecordEvent);
 }
