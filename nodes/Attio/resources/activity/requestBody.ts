@@ -71,7 +71,7 @@ function parseLinkedRecordsJson(this: IExecuteSingleFunctions): unknown[] {
 		!linkedRecords.every((item) => isObject(item) || typeof item === 'string')
 	) {
 		throw new NodeOperationError(this.getNode(), 'Invalid linked records JSON', {
-			description: `'Linked Records (JSON)' must be an array, like [{ "target_object": "deals", "target_record_id": "..." }]`,
+			description: `'Linked Records (JSON)' must be an array of email addresses, domains or record references. For the record reference syntax, see https://docs.attio.com/rest-api/guides/activities#linking-records-by-attribute-value`,
 			itemIndex: this.getItemIndex(),
 		});
 	}

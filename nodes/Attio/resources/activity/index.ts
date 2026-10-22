@@ -167,8 +167,8 @@ export const activityDescription: INodeProperties[] = [
 		required: true,
 		default: '[\n  "jane@example.com",\n  "example.com"\n]',
 		description:
-			'An array of record references. An email address links the person with it, and a domain links the company. To link a record of any object by ID, use { "target_object": "deals", "target_record_id": "..." }.',
-		hint: "Build the array with an expression, like <code>{{ $json.values.email_addresses.map(email => email.email_address) }}</code> for the current item. To link records from every input item in one activity, use <code>$input.all()</code> and turn on 'Execute Once' in the node's settings.",
+			'An array of record references. An email address links the person with it, and a domain links the company. To link a record of any object by ID, use the <a href="https://docs.attio.com/rest-api/guides/activities#linking-records-by-attribute-value">target_object syntax</a>.',
+		hint: "To log one activity linked to the records from every input item, use an expression like <code>{{ $input.all().flatMap(item => item.json.values.email_addresses.map(email => email.email_address)) }}</code> and turn on 'Execute Once' in the node's settings.",
 		displayOptions: {
 			show: {
 				resource: ['activity'],
