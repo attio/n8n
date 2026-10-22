@@ -161,6 +161,20 @@ export const activityDescription: INodeProperties[] = [
 		],
 	},
 	{
+		displayName:
+			"The node logs one activity for each input item. To log one activity linked to the records from every input item, turn on 'Execute Once' in the node's settings.",
+		name: 'executeOnceNotice',
+		type: 'notice',
+		default: '',
+		displayOptions: {
+			show: {
+				resource: ['activity'],
+				operation: ['create'],
+				linkedRecordsType: ['json'],
+			},
+		},
+	},
+	{
 		displayName: 'Linked Records (JSON)',
 		name: 'linkedRecordsJson',
 		type: 'json',
@@ -168,7 +182,7 @@ export const activityDescription: INodeProperties[] = [
 		default: '[\n  "jane@example.com",\n  "example.com"\n]',
 		description:
 			'An array of record references. An email address links the person with it, and a domain links the company. To link a record of any object by ID, use the <a href="https://docs.attio.com/rest-api/guides/activities#linking-records-by-attribute-value">target_object syntax</a>.',
-		hint: "To log one activity linked to the records from every input item, use an expression like <code>{{ $input.all().flatMap(item => item.json.values.email_addresses.map(email => email.email_address)) }}</code> and turn on 'Execute Once' in the node's settings.",
+		hint: 'To link the records from every input item, use an expression like <code>{{ $input.all().flatMap(item => item.json.values.email_addresses.map(email => email.email_address)) }}</code>',
 		displayOptions: {
 			show: {
 				resource: ['activity'],
