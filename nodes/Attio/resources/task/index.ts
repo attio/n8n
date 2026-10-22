@@ -51,7 +51,7 @@ const memberOptions: INodePropertyTypeOptions = {
 };
 
 const assigneesField: INodeProperties = {
-	displayName: 'Assignee Names or IDs',
+	displayName: 'Assignees',
 	name: 'assignees',
 	type: 'multiOptions',
 	typeOptions: memberOptions,
@@ -255,7 +255,7 @@ export const taskDescription: INodeProperties[] = [
 		},
 		options: [
 			{
-				displayName: 'Assignee Name or ID',
+				displayName: 'Assignee',
 				name: 'assignee',
 				type: 'options',
 				typeOptions: memberOptions,
