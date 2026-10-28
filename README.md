@@ -34,6 +34,8 @@ Refer to the [n8n community nodes installation guide](https://docs.n8n.io/integr
 
 - **List Entry**
   - **Create**: add a record to a list. The record must belong to the object the list is for, such as people or companies, which is read from the list. Give the record's ID, or switch to **From list** to search all records of the list's object (not just those already in the list) by name, domain or email address, showing up to 25 results. Entry attributes load from the list, or can be mapped automatically from input fields named after attribute slugs. They're optional, so a record can be added without any. A record can be added to the same list more than once.
+  - **Create or Update**: add a record to a list, or update its entry if it's already there, using the same fields as Create. Fails if the record is in the list more than once, as there's no way to tell which entry to update. Multi-value entry attributes are overwritten.
+  - **Delete**: remove an entry from a list by entry ID. The record itself isn't deleted.
   - **Get**: get a list entry by ID.
 - **Note**
   - **Create**: create a note on a record, in plain text or markdown, optionally backdated or linked to a meeting.

@@ -1,7 +1,7 @@
 import type { INodeProperties } from 'n8n-workflow';
 import { listOptions } from '../../shared/lists';
-import { unwrapResponse } from '../../shared/output';
-import { buildCreateListEntryBody, validateEntryId } from './requestBody';
+import { deletedResponse, unwrapResponse } from '../../shared/output';
+import { buildListEntryBody, validateEntryId } from './requestBody';
 
 const entriesUrl = '=/lists/{{ encodeURIComponent($parameter.list) }}/entries';
 
@@ -31,10 +31,46 @@ export const listEntryDescription: INodeProperties[] = [
 						url: entriesUrl,
 					},
 					send: {
-						preSend: [buildCreateListEntryBody],
+						preSend: [buildListEntryBody],
 					},
 					output: {
 						postReceive: [unwrapResponse],
+					},
+				},
+			},
+			{
+				name: 'Create or Update',
+				value: 'upsert',
+				description: 'Create a new record, or update the current one if it already exists (upsert)',
+				action: 'Create or update a list entry',
+				routing: {
+					request: {
+						method: 'PUT',
+						url: entriesUrl,
+					},
+					send: {
+						preSend: [buildListEntryBody],
+					},
+					output: {
+						postReceive: [unwrapResponse],
+					},
+				},
+			},
+			{
+				name: 'Delete',
+				value: 'delete',
+				description: 'Remove an entry from a list',
+				action: 'Delete a list entry',
+				routing: {
+					request: {
+						method: 'DELETE',
+						url: entryUrl,
+					},
+					send: {
+						preSend: [validateEntryId],
+					},
+					output: {
+						postReceive: [deletedResponse],
 					},
 				},
 			},
@@ -81,7 +117,7 @@ export const listEntryDescription: INodeProperties[] = [
 		required: true,
 		default: { mode: 'id', value: '' },
 		description:
-			'Record to add to the list. "From list" searches all records of the object the list is for, not records already in the list. A record can be added to the same list more than once.',
+			'Record to add to the list. "From list" searches all records of the object the list is for, not records already in the list. Create can add a record to the same list more than once. Create or Update updates the record\'s entry if it has one, and fails if it has several.',
 		modes: [
 			{
 				displayName: 'By ID',
@@ -114,7 +150,7 @@ export const listEntryDescription: INodeProperties[] = [
 		displayOptions: {
 			show: {
 				resource: ['listEntry'],
-				operation: ['create'],
+				operation: ['create', 'upsert'],
 			},
 		},
 	},
@@ -125,10 +161,12 @@ export const listEntryDescription: INodeProperties[] = [
 		required: true,
 		default: '',
 		placeholder: 'e.g. 2e6e29ea-c4e0-4f44-842d-78a891f8c156',
+		description:
+			'ID of the list entry, which is different from the ID of the record it belongs to. Get it from the output of a Create, Create or Update or Get Many list entry step, or an Attio Trigger list entry event, in its <code>entry_id</code> field.',
 		displayOptions: {
 			show: {
 				resource: ['listEntry'],
-				operation: ['get'],
+				operation: ['delete', 'get'],
 			},
 		},
 	},
@@ -142,7 +180,7 @@ export const listEntryDescription: INodeProperties[] = [
 			value: null,
 		},
 		description:
-			"Values to set on the entry, keyed by the list's attributes. These belong to the entry, not the parent record. Multi-value attributes take an array.",
+			"Values to set on the entry, keyed by the list's attributes. These belong to the entry, not the parent record. Multi-value attributes take an array, and Create or Update replaces their existing values.",
 		typeOptions: {
 			loadOptionsDependsOn: ['list', 'operation'],
 			resourceMapper: {
@@ -161,7 +199,7 @@ export const listEntryDescription: INodeProperties[] = [
 		displayOptions: {
 			show: {
 				resource: ['listEntry'],
-				operation: ['create'],
+				operation: ['create', 'upsert'],
 			},
 			// Otherwise the mapper loads attributes before a list is chosen
 			hide: {
