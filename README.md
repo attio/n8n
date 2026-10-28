@@ -32,6 +32,9 @@ Refer to the [n8n community nodes installation guide](https://docs.n8n.io/integr
 
 ## Operations
 
+- **List Entry**
+  - **Create**: add a record to a list. The record must belong to the object the list is for, such as people or companies, which is read from the list. Give the record's ID, or switch to **From list** to search all records of the list's object (not just those already in the list) by name, domain or email address, showing up to 25 results. Entry attributes load from the list, or can be mapped automatically from input fields named after attribute slugs. They're optional, so a record can be added without any. A record can be added to the same list more than once.
+  - **Get**: get a list entry by ID.
 - **Note**
   - **Create**: create a note on a record, in plain text or markdown, optionally backdated or linked to a meeting.
   - **Delete**: delete a note by ID.
@@ -51,6 +54,8 @@ Refer to the [n8n community nodes installation guide](https://docs.n8n.io/integr
   - **Get**: get a task by ID.
   - **Get Many**: list tasks, optionally filtered by assignee, completion status or linked record, and sorted by created or completed date.
   - **Update**: change a task's deadline, completion status, assignees or linked records. Attio doesn't allow task content to be edited through the API.
+
+List entry operations need the `list_entry:read-write` and `list_configuration:read` scopes. Searching for a record in the dropdown also needs `record_permission:read` and `object_configuration:read`.
 
 Task operations need the `task:read-write`, `object_configuration:read`, `record_permission:read` and `user_management:read` scopes.
 

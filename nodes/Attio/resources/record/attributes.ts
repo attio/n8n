@@ -126,12 +126,11 @@ async function loadOptions(
 
 async function loadAttributeFields(
 	this: ILoadOptionsFunctions,
-	object: string,
+	attributePath: string,
 	operation: string,
 ): Promise<ResourceMapperField[]> {
 	const isUpdate = operation === 'update';
 
-	const attributePath = `/objects/${encodeURIComponent(object)}/attributes`;
 	const attributes = await attioGetList(this, attributePath, isAttributeResponse);
 
 	const fields = await Promise.all(
@@ -165,17 +164,15 @@ async function loadAttributeFields(
 	return fields.flat();
 }
 
-export async function getRecordAttributes(
+// Loads the writable attributes of an object or list, such as /objects/people/attributes
+export async function getAttributeFields(
 	this: ILoadOptionsFunctions,
+	attributePath: string,
 ): Promise<ResourceMapperFields> {
-	const object = this.getNodeParameter('object', '') as string;
 	const operation = this.getNodeParameter('operation', '') as string;
-	if (!object) {
-		return { fields: [], emptyFieldsNotice: 'Choose an object to see its attributes' };
-	}
 
 	try {
-		return { fields: await loadAttributeFields.call(this, object, operation) };
+		return { fields: await loadAttributeFields.call(this, attributePath, operation) };
 	} catch (error) {
 		// The editor drops errors from this method and only says there are no fields,
 		// so the reason is passed back as the notice instead
@@ -187,17 +184,27 @@ export async function getRecordAttributes(
 	}
 }
 
+export async function getRecordAttributes(
+	this: ILoadOptionsFunctions,
+): Promise<ResourceMapperFields> {
+	const object = this.getNodeParameter('object', '') as string;
+	if (!object) {
+		return { fields: [], emptyFieldsNotice: 'Choose an object to see its attributes' };
+	}
+
+	return await getAttributeFields.call(this, `/objects/${encodeURIComponent(object)}/attributes`);
+}
+
 function isEmpty(value: unknown): boolean {
 	return (
 		value === undefined || value === null || (typeof value === 'string' && value.trim() === '')
 	);
 }
 
-export async function buildRecordValuesBody(
-	this: IExecuteSingleFunctions,
-	requestOptions: IHttpRequestOptions,
-): Promise<IHttpRequestOptions> {
-	const mapper = this.getNodeParameter('values') as ResourceMapperValue;
+// Converts the resource mapper's values, given under the parameter `name`, into Attio's
+// values object, leaving out empty ones
+export function buildAttributeValues(this: IExecuteSingleFunctions, name: string): IDataObject {
+	const mapper = this.getNodeParameter(name) as ResourceMapperValue;
 	const autoMap = mapper.mappingMode === 'autoMapInputData';
 	const source = autoMap ? this.getInputData().json : (mapper.value ?? {});
 
@@ -230,11 +237,22 @@ export async function buildRecordValuesBody(
 		values[field.id] = result.newValue as IDataObject[string];
 	}
 
+	return values;
+}
+
+export async function buildRecordValuesBody(
+	this: IExecuteSingleFunctions,
+	requestOptions: IHttpRequestOptions,
+): Promise<IHttpRequestOptions> {
+	const values = buildAttributeValues.call(this, 'values');
+
 	if (Object.keys(values).length === 0) {
+		const mapper = this.getNodeParameter('values') as ResourceMapperValue;
 		throw new NodeOperationError(this.getNode(), 'No attribute values to write', {
-			description: autoMap
-				? "None of the input item's fields match an attribute slug on this object"
-				: 'Add at least one attribute under "Attributes"',
+			description:
+				mapper.mappingMode === 'autoMapInputData'
+					? "None of the input item's fields match an attribute slug on this object"
+					: 'Add at least one attribute under "Attributes"',
 			itemIndex: this.getItemIndex(),
 		});
 	}
