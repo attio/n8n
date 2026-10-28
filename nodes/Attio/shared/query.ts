@@ -8,9 +8,10 @@ import {
 	type ILoadOptionsFunctions,
 	type INodePropertyOptions,
 } from 'n8n-workflow';
-import { isAttributeResponse, type AttributeResponse } from '../resources/record/attributes';
-import { isListResponse } from './lists';
-import { attioGet, attioGetList, isObject } from './request';
+import { z } from 'zod/v4';
+import { attributeSchema, type AttributeResponse } from '../resources/record/attributes';
+import { listSchema } from './lists';
+import { attioGet, attioGetList, dataObjectSchema, matches } from './request';
 
 type FilterCondition = {
 	attribute: string;
@@ -25,19 +26,17 @@ type SortRule = {
 	direction: 'asc' | 'desc';
 };
 
-type ObjectResponse = {
-	id: { object_id: string };
-	api_slug: string | null;
-};
+const objectSchema = z.object({
+	id: z.object({ object_id: z.string() }),
+	api_slug: z.string().nullable(),
+});
 
-function isObjectResponse(value: unknown): value is ObjectResponse {
-	return (
-		isObject(value) &&
-		isObject(value.id) &&
-		typeof value.id.object_id === 'string' &&
-		(typeof value.api_slug === 'string' || value.api_slug === null)
-	);
-}
+// Record reference attributes list the objects they can reference in their config
+const recordReferenceConfigSchema = z.object({
+	config: z.object({
+		record_reference: z.object({ allowed_object_ids: z.array(z.string()) }),
+	}),
+});
 
 // Attio has no negative operators, so those wrap the positive one in $not
 const filterOperators: Record<string, { operator: string; negate?: boolean }> = {
@@ -186,11 +185,11 @@ async function loadQueryAttributes(
 ): Promise<AttributeResponse[]> {
 	const collection = isList ? 'lists' : 'objects';
 	const path = `/${collection}/${encodeURIComponent(parent)}`;
-	if (!isList) return await attioGetList(context, `${path}/attributes`, isAttributeResponse);
+	if (!isList) return await attioGetList(context, `${path}/attributes`, attributeSchema);
 
 	const [attributes, list] = await Promise.all([
-		attioGetList(context, `${path}/attributes`, isAttributeResponse),
-		attioGet(context, path, isListResponse, 'list'),
+		attioGetList(context, `${path}/attributes`, attributeSchema),
+		attioGet(context, path, listSchema, 'list'),
 	]);
 
 	// Legacy lists for more than one object have no single object to reference
@@ -209,13 +208,10 @@ function byKey(attributes: AttributeResponse[]): Map<string, AttributeResponse> 
 	);
 }
 
-// Record reference attributes list the objects they can reference; an empty list allows any
+// An empty list allows any object
 function allowedObjectIds(attribute: AttributeResponse): string[] {
-	const { config } = attribute as AttributeResponse & { config?: unknown };
-	if (!isObject(config) || !isObject(config.record_reference)) return [];
-
-	const ids = config.record_reference.allowed_object_ids;
-	return Array.isArray(ids) ? ids.filter((id): id is string => typeof id === 'string') : [];
+	const result = recordReferenceConfigSchema.safeParse(attribute);
+	return result.success ? result.data.config.record_reference.allowed_object_ids : [];
 }
 
 async function attributeOptions(
@@ -277,7 +273,7 @@ export async function getQueryFilterFields(
 	// Domain and email address are only offered when companies or people can be referenced. The
 	// parent record references its list's object by slug rather than ID
 	const allowedIds = allowedObjectIds(attribute);
-	const objects = await attioGetList(this, '/objects', isObjectResponse);
+	const objects = await attioGetList(this, '/objects', objectSchema);
 	const allowedSlugs = new Set(
 		objects
 			.filter(
@@ -497,14 +493,14 @@ function buildConditionsFilter(
 function parseJsonFilter(this: IExecuteSingleFunctions): IDataObject {
 	const value = this.getNodeParameter('filterJson') as unknown;
 	const filter = typeof value === 'string' ? jsonParse<unknown>(value) : value;
-	if (!isObject(filter)) {
+	if (!matches(dataObjectSchema, filter)) {
 		throw new NodeOperationError(this.getNode(), 'Invalid filter JSON', {
 			description: 'The filter must be a JSON object, like { "name": { "$contains": "Acme" } }',
 			itemIndex: this.getItemIndex(),
 		});
 	}
 
-	return filter as IDataObject;
+	return filter;
 }
 
 function buildSorts(

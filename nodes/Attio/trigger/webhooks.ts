@@ -5,7 +5,8 @@ import {
 	type IWebhookFunctions,
 	type JsonObject,
 } from 'n8n-workflow';
-import { attioGetList, attioRequest, isObject } from '../shared/request';
+import { z } from 'zod/v4';
+import { attioGetList, attioRequest, dataObjectSchema, matches } from '../shared/request';
 
 export type RecordEventType = 'record.created' | 'record.updated' | 'record.deleted';
 
@@ -22,130 +23,70 @@ export type WebhookFilter = {
 	$and: Array<{ field: string; operator: 'equals'; value: string }>;
 };
 
-type WebhookResponse = {
-	id: { webhook_id: string };
-	target_url: string;
-	status: 'active' | 'degraded' | 'inactive';
-};
+const webhookSchema = z.object({
+	id: z.object({ webhook_id: z.string() }),
+	target_url: z.string(),
+	status: z.enum(['active', 'degraded', 'inactive']),
+});
 
-type CreatedWebhookResponse = WebhookResponse & { secret: string };
+type WebhookResponse = z.infer<typeof webhookSchema>;
 
-export type RecordEvent = {
-	event_type: string;
-	id: {
-		workspace_id: string;
-		object_id: string;
-		record_id: string;
-		attribute_id?: string;
-	};
-	actor: { type: string | null; id: string | null };
-};
+const createdWebhookSchema = webhookSchema.extend({ secret: z.string() });
 
-export type ListEntryEvent = {
-	event_type: string;
-	id: {
-		workspace_id: string;
-		list_id: string;
-		entry_id: string;
-		attribute_id?: string;
-	};
-	parent_object_id: string;
-	parent_record_id: string;
-	actor: { type: string | null; id: string | null };
-};
+type CreatedWebhookResponse = z.infer<typeof createdWebhookSchema>;
 
-export type TaskEvent = {
-	event_type: string;
-	id: { workspace_id: string; task_id: string };
-	actor: { type: string | null; id: string | null };
-};
+const recordEventSchema = z.object({
+	event_type: z.string(),
+	id: z.object({
+		object_id: z.string(),
+		record_id: z.string(),
+		attribute_id: z.string().optional(),
+	}),
+	actor: dataObjectSchema,
+});
 
-export type CallRecordingEvent = {
-	event_type: string;
-	id: { workspace_id: string; meeting_id: string; call_recording_id: string };
-	actor: { type: string | null; id: string | null };
-};
+export type RecordEvent = z.infer<typeof recordEventSchema>;
 
-export type ActivityRecordEvent = {
-	event_type: string;
-	id: { workspace_id: string; activity_id: string; record_id: string };
-	actor: { type: string | null; id: string | null };
-};
+const listEntryEventSchema = z.object({
+	event_type: z.string(),
+	id: z.object({
+		list_id: z.string(),
+		entry_id: z.string(),
+		attribute_id: z.string().optional(),
+	}),
+	parent_object_id: z.string(),
+	parent_record_id: z.string(),
+	actor: dataObjectSchema,
+});
 
-function isWebhookResponse(value: unknown): value is WebhookResponse {
-	return (
-		isObject(value) &&
-		isObject(value.id) &&
-		typeof value.id.webhook_id === 'string' &&
-		typeof value.target_url === 'string' &&
-		(value.status === 'active' || value.status === 'degraded' || value.status === 'inactive')
-	);
-}
+export type ListEntryEvent = z.infer<typeof listEntryEventSchema>;
 
-function isCreatedWebhookResponse(value: unknown): value is CreatedWebhookResponse {
-	return isObject(value) && typeof value.secret === 'string' && isWebhookResponse(value);
-}
+const taskEventSchema = z.object({
+	event_type: z.string(),
+	id: z.object({ task_id: z.string() }),
+	actor: dataObjectSchema,
+});
 
-function isRecordEvent(value: unknown): value is RecordEvent {
-	return (
-		isObject(value) &&
-		typeof value.event_type === 'string' &&
-		isObject(value.id) &&
-		typeof value.id.object_id === 'string' &&
-		typeof value.id.record_id === 'string' &&
-		isObject(value.actor)
-	);
-}
+export type TaskEvent = z.infer<typeof taskEventSchema>;
 
-function isListEntryEvent(value: unknown): value is ListEntryEvent {
-	return (
-		isObject(value) &&
-		typeof value.event_type === 'string' &&
-		isObject(value.id) &&
-		typeof value.id.list_id === 'string' &&
-		typeof value.id.entry_id === 'string' &&
-		typeof value.parent_object_id === 'string' &&
-		typeof value.parent_record_id === 'string' &&
-		isObject(value.actor)
-	);
-}
+const callRecordingEventSchema = z.object({
+	event_type: z.string(),
+	id: z.object({ meeting_id: z.string(), call_recording_id: z.string() }),
+	actor: dataObjectSchema,
+});
 
-function isTaskEvent(value: unknown): value is TaskEvent {
-	return (
-		isObject(value) &&
-		typeof value.event_type === 'string' &&
-		isObject(value.id) &&
-		typeof value.id.task_id === 'string' &&
-		isObject(value.actor)
-	);
-}
+export type CallRecordingEvent = z.infer<typeof callRecordingEventSchema>;
 
-function isCallRecordingEvent(value: unknown): value is CallRecordingEvent {
-	return (
-		isObject(value) &&
-		typeof value.event_type === 'string' &&
-		isObject(value.id) &&
-		typeof value.id.meeting_id === 'string' &&
-		typeof value.id.call_recording_id === 'string' &&
-		isObject(value.actor)
-	);
-}
+const activityRecordEventSchema = z.object({
+	event_type: z.string(),
+	id: z.object({ activity_id: z.string(), record_id: z.string() }),
+	actor: dataObjectSchema,
+});
 
-function isActivityRecordEvent(value: unknown): value is ActivityRecordEvent {
-	return (
-		isObject(value) &&
-		typeof value.event_type === 'string' &&
-		isObject(value.id) &&
-		typeof value.id.activity_id === 'string' &&
-		typeof value.id.record_id === 'string' &&
-		isObject(value.actor)
-	);
-}
+export type ActivityRecordEvent = z.infer<typeof activityRecordEventSchema>;
 
 // Webhook deletes return an empty body
-function isEmptyResponse(data: unknown): data is undefined {
-	return data === undefined || isObject(data);
-}
+const emptyResponseSchema = z.union([z.undefined(), dataObjectSchema]);
 
 function isNotFound(error: unknown): boolean {
 	return error instanceof NodeApiError && error.httpCode === '404';
@@ -159,7 +100,7 @@ export async function getWebhook(
 		return await attioRequest(
 			context,
 			{ method: 'GET', path: `/webhooks/${encodeURIComponent(webhookId)}` },
-			isWebhookResponse,
+			webhookSchema,
 			'webhook',
 		);
 	} catch (error) {
@@ -173,7 +114,7 @@ export async function deleteWebhook(context: IHookFunctions, webhookId: string):
 		await attioRequest(
 			context,
 			{ method: 'DELETE', path: `/webhooks/${encodeURIComponent(webhookId)}` },
-			isEmptyResponse,
+			emptyResponseSchema,
 			'empty response',
 		);
 	} catch (error) {
@@ -193,7 +134,7 @@ async function deleteWebhooksTargeting(context: IHookFunctions, targetUrl: strin
 		const page = await attioGetList(
 			context,
 			`/webhooks?limit=${pageSize}&offset=${offset}`,
-			isWebhookResponse,
+			webhookSchema,
 		);
 		for (const webhook of page) {
 			if (webhook.target_url === targetUrl) stale.push(webhook.id.webhook_id);
@@ -226,7 +167,7 @@ export async function createWebhook(
 				},
 			},
 		},
-		isCreatedWebhookResponse,
+		createdWebhookSchema,
 		'webhook',
 	);
 }
@@ -245,27 +186,27 @@ export function hasValidSignature(context: IWebhookFunctions, secret: string): b
 }
 
 // Attio batches events, so a delivery can hold several
-function getEvents<T>(context: IWebhookFunctions, isEvent: (value: unknown) => value is T): T[] {
+function getEvents<T>(context: IWebhookFunctions, schema: z.ZodType<T>): T[] {
 	const { events } = context.getBodyData();
-	return Array.isArray(events) ? events.filter(isEvent) : [];
+	return Array.isArray(events) ? events.filter((event): event is T => matches(schema, event)) : [];
 }
 
 export function getRecordEvents(context: IWebhookFunctions): RecordEvent[] {
-	return getEvents(context, isRecordEvent);
+	return getEvents(context, recordEventSchema);
 }
 
 export function getListEntryEvents(context: IWebhookFunctions): ListEntryEvent[] {
-	return getEvents(context, isListEntryEvent);
+	return getEvents(context, listEntryEventSchema);
 }
 
 export function getTaskEvents(context: IWebhookFunctions): TaskEvent[] {
-	return getEvents(context, isTaskEvent);
+	return getEvents(context, taskEventSchema);
 }
 
 export function getCallRecordingEvents(context: IWebhookFunctions): CallRecordingEvent[] {
-	return getEvents(context, isCallRecordingEvent);
+	return getEvents(context, callRecordingEventSchema);
 }
 
 export function getActivityRecordEvents(context: IWebhookFunctions): ActivityRecordEvent[] {
-	return getEvents(context, isActivityRecordEvent);
+	return getEvents(context, activityRecordEventSchema);
 }

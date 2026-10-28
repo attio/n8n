@@ -4,58 +4,43 @@ import {
 	type IWebhookFunctions,
 	type JsonObject,
 } from 'n8n-workflow';
-import { attioGet, attioGetList, isObject } from '../shared/request';
+import { z } from 'zod/v4';
+import { attioGet, attioGetList, dataObjectSchema } from '../shared/request';
 import type { TaskEvent } from './webhooks';
 
-type LinkedRecord = { target_object_id: string; target_record_id: string };
+const linkedRecordSchema = z.object({
+	target_object_id: z.string(),
+	target_record_id: z.string(),
+});
 
-type Assignee = { referenced_actor_type: string; referenced_actor_id: string };
+type LinkedRecord = z.infer<typeof linkedRecordSchema>;
 
-type Actor = { type: string | null; id: string | null };
+const taskSchema = z.object({
+	linked_records: z.array(linkedRecordSchema),
+	assignees: z.array(
+		z.object({
+			referenced_actor_type: z.string(),
+			referenced_actor_id: z.string(),
+		}),
+	),
+	created_by_actor: z.object({
+		type: z.string().nullable(),
+		id: z.string().nullable(),
+	}),
+});
 
-type TaskResponse = IDataObject & {
-	linked_records: LinkedRecord[];
-	assignees: Assignee[];
-	created_by_actor: Actor;
-};
+type TaskResponse = z.infer<typeof taskSchema>;
 
-type WorkspaceMember = IDataObject & { id: { workspace_member_id: string } };
+const workspaceMemberSchema = z.object({
+	id: z.object({ workspace_member_id: z.string() }),
+});
 
-function isLinkedRecord(value: unknown): value is LinkedRecord {
-	return (
-		isObject(value) &&
-		typeof value.target_object_id === 'string' &&
-		typeof value.target_record_id === 'string'
-	);
-}
-
-function isAssignee(value: unknown): value is Assignee {
-	return (
-		isObject(value) &&
-		typeof value.referenced_actor_type === 'string' &&
-		typeof value.referenced_actor_id === 'string'
-	);
-}
-
-function isTaskResponse(value: unknown): value is TaskResponse {
-	return (
-		isObject(value) &&
-		Array.isArray(value.linked_records) &&
-		value.linked_records.every(isLinkedRecord) &&
-		Array.isArray(value.assignees) &&
-		value.assignees.every(isAssignee) &&
-		isObject(value.created_by_actor)
-	);
-}
-
-function isWorkspaceMember(value: unknown): value is WorkspaceMember {
-	return isObject(value) && isObject(value.id) && typeof value.id.workspace_member_id === 'string';
-}
+type WorkspaceMember = z.infer<typeof workspaceMemberSchema>;
 
 export async function getWorkspaceMembers(
 	context: IWebhookFunctions,
 ): Promise<Map<string, WorkspaceMember>> {
-	const members = await attioGetList(context, '/workspace_members', isWorkspaceMember);
+	const members = await attioGetList(context, '/workspace_members', workspaceMemberSchema);
 	return new Map(members.map((member) => [member.id.workspace_member_id, member]));
 }
 
@@ -69,7 +54,7 @@ async function getLinkedRecord(
 		return await attioGet(
 			context,
 			`/objects/${encodeURIComponent(target_object_id)}/records/${encodeURIComponent(target_record_id)}`,
-			(data): data is IDataObject => isObject(data),
+			dataObjectSchema,
 			'record',
 		);
 	} catch (error) {
@@ -117,7 +102,7 @@ export async function getTask(
 	const task = await attioGet(
 		context,
 		`/tasks/${encodeURIComponent(event.id.task_id)}`,
-		isTaskResponse,
+		taskSchema,
 		'task',
 	);
 
