@@ -1,13 +1,27 @@
 import type { ILoadOptionsFunctions, INodePropertyOptions } from 'n8n-workflow';
 import { isAttributeResponse } from '../resources/record/attributes';
 import { isListResponse } from '../shared/lists';
-import { attioGetList, isObject } from '../shared/request';
+import { attioGetAllByCursor, attioGetList, isObject } from '../shared/request';
 
 type ObjectResponse = {
 	id: { object_id: string };
 	api_slug: string | null;
 	plural_noun: string | null;
 };
+
+type ActivityResponse = {
+	id: { activity_id: string };
+	singular_noun: string;
+};
+
+function isActivityResponse(value: unknown): value is ActivityResponse {
+	return (
+		isObject(value) &&
+		isObject(value.id) &&
+		typeof value.id.activity_id === 'string' &&
+		typeof value.singular_noun === 'string'
+	);
+}
 
 function isObjectResponse(value: unknown): value is ObjectResponse {
 	return (
@@ -43,6 +57,16 @@ export async function getTriggerLists(
 	const lists = await attioGetList(this, '/lists', isListResponse);
 
 	return lists.map((list) => ({ name: list.name, value: list.id.list_id })).sort(byName);
+}
+
+export async function getTriggerActivities(
+	this: ILoadOptionsFunctions,
+): Promise<INodePropertyOptions[]> {
+	const activities = await attioGetAllByCursor(this, '/activities', isActivityResponse, 1000);
+
+	return activities
+		.map((activity) => ({ name: activity.singular_noun, value: activity.id.activity_id }))
+		.sort(byName);
 }
 
 async function getAttributeOptions(

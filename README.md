@@ -74,6 +74,7 @@ Starts a workflow from an Attio webhook, which the trigger creates when the work
 - **Include Linked Records and Members** (Task Created): adds the full record to each linked record as `target_record`, and the workspace member to each assignee as `referenced_actor` and to the creator as `created_by_actor.workspace_member`. A linked record that's since been deleted has no `target_record`.
 - **Call Recording Created**: a call recording finishes processing and Attio has generated its transcript and summary, which can take a few minutes after the call ends. Outputs the recording with its transcript, which is `null` if none is available. Its `video_url` expires an hour after the trigger fires. Needs the `meeting:read` and `call_recording:read` scopes.
 - **Include Meeting** (Call Recording Created): adds the recording's meeting as `meeting`, with its title, times, participants and linked records. Also needs the `record_permission:read` scope. A meeting that's since been deleted is left out.
+- **Activity Created**: a record of the chosen activity, such as a phone call, is logged. Outputs the activity record with its values. Activities are in early access and must be enabled for the workspace. Needs the `activity_configuration:read` and `activity_record:read` scopes.
 
 List entry operations need the `list_entry:read-write` and `list_configuration:read` scopes. Searching for a record in the dropdown, filtering on record references and parent records, or including parent records in Get Many, also needs `record_permission:read` and `object_configuration:read`.
 
