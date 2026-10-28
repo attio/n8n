@@ -2,6 +2,12 @@ import { NodeConnectionTypes, type INodeType, type INodeTypeDescription } from '
 import { noteDescription } from './resources/note';
 import { recordDescription } from './resources/record';
 import { getRecordAttributes } from './resources/record/attributes';
+import {
+	getQueryAttributes,
+	getQueryFilterFields,
+	getQuerySortAttributes,
+	getQuerySortFields,
+} from './resources/record/query';
 import { taskDescription } from './resources/task';
 import { attioBaseUrl } from './shared/request';
 
@@ -62,6 +68,12 @@ export class Attio implements INodeType {
 	};
 
 	methods = {
+		loadOptions: {
+			getQueryAttributes,
+			getQueryFilterFields,
+			getQuerySortAttributes,
+			getQuerySortFields,
+		},
 		resourceMapping: {
 			getRecordAttributes,
 		},
