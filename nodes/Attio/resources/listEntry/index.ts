@@ -1,9 +1,15 @@
 import type { INodeProperties } from 'n8n-workflow';
 import { listOptions } from '../../shared/lists';
 import { deletedResponse, unwrapResponse } from '../../shared/output';
+import { offsetPagination, returnAllFields } from '../../shared/pagination';
+import { buildQueryBody } from '../../shared/query';
+import { queryProperties } from '../../shared/queryProperties';
+import { addParentRecords } from './parentRecords';
 import { buildListEntryBody, validateEntryId } from './requestBody';
 
 const entriesUrl = '=/lists/{{ encodeURIComponent($parameter.list) }}/entries';
+
+const queryPagination = offsetPagination(500, 'body');
 
 const entryUrl =
 	'=/lists/{{ encodeURIComponent($parameter.list) }}/entries/{{ encodeURIComponent($parameter.entryId.trim()) }}';
@@ -89,6 +95,26 @@ export const listEntryDescription: INodeProperties[] = [
 					},
 					output: {
 						postReceive: [unwrapResponse],
+					},
+				},
+			},
+			{
+				name: 'Get Many',
+				value: 'getAll',
+				description: 'Get many entries in a list',
+				action: 'Get many list entries',
+				routing: {
+					request: {
+						method: 'POST',
+						url: `${entriesUrl}/query`,
+					},
+					send: {
+						...queryPagination.send,
+						preSend: [buildQueryBody],
+					},
+					operations: queryPagination.operations,
+					output: {
+						postReceive: [unwrapResponse, addParentRecords],
 					},
 				},
 			},
@@ -207,4 +233,20 @@ export const listEntryDescription: INodeProperties[] = [
 			},
 		},
 	},
+	...returnAllFields('listEntry'),
+	{
+		displayName: 'Include Parent Record',
+		name: 'includeParentRecord',
+		type: 'boolean',
+		default: true,
+		description:
+			"Whether to add each entry's parent record, with its attribute values, as <code>parent_record</code>",
+		displayOptions: {
+			show: {
+				resource: ['listEntry'],
+				operation: ['getAll'],
+			},
+		},
+	},
+	...queryProperties('listEntry'),
 ];

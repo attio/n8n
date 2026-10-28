@@ -9,7 +9,7 @@ import {
 	getQueryFilterFields,
 	getQuerySortAttributes,
 	getQuerySortFields,
-} from './resources/record/query';
+} from './shared/query';
 import { taskDescription } from './resources/task';
 import { attioBaseUrl } from './shared/request';
 
