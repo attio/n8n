@@ -7,12 +7,14 @@ import {
 	type IWebhookFunctions,
 	type IWebhookResponseData,
 } from 'n8n-workflow';
+import { getCallRecording } from './trigger/callRecordings';
 import { getTriggerAttributes, getTriggerObjects } from './trigger/loadOptions';
 import { getRecord } from './trigger/records';
 import { getTask, getWorkspaceMembers } from './trigger/tasks';
 import {
 	createWebhook,
 	deleteWebhook,
+	getCallRecordingEvents,
 	getRecordEvents,
 	getTaskEvents,
 	getWebhook,
@@ -54,9 +56,8 @@ function getAttribute(context: IHookFunctions | IWebhookFunctions, eventType: Ev
 	return context.getNodeParameter('attribute', '') as string;
 }
 
-// Task events aren't filtered, so only record events have a filter
 function getFilter(context: IHookFunctions, eventType: EventType): WebhookFilter | null {
-	if (eventType === 'task.created') return null;
+	if (eventType === 'task.created' || eventType === 'call-recording.created') return null;
 
 	const object = context.getNodeParameter('object') as string;
 	const attribute = getAttribute(context, eventType);
@@ -121,6 +122,11 @@ export class AttioTrigger implements INodeType {
 				noDataExpression: true,
 				required: true,
 				options: [
+					{
+						name: 'Call Recording Created',
+						value: 'call-recording.created',
+						description: 'Triggers when a call recording finishes processing',
+					},
 					{
 						name: 'Record Created',
 						value: 'record.created',
@@ -208,6 +214,19 @@ export class AttioTrigger implements INodeType {
 					},
 				},
 			},
+			{
+				displayName: 'Include Meeting',
+				name: 'includeMeeting',
+				type: 'boolean',
+				default: false,
+				description:
+					"Whether to add the recording's meeting, with its title, times, participants and linked records. Costs an extra request per recording.",
+				displayOptions: {
+					show: {
+						event: ['call-recording.created'],
+					},
+				},
+			},
 		],
 	};
 
@@ -287,6 +306,17 @@ export class AttioTrigger implements INodeType {
 				events.map(async (event) => await getTask(this, event, members)),
 			);
 			return { workflowData: [this.helpers.returnJsonArray(tasks)] };
+		}
+
+		if (eventType === 'call-recording.created') {
+			const events = getCallRecordingEvents(this);
+			if (events.length === 0) return {};
+
+			const includeMeeting = this.getNodeParameter('includeMeeting', false) as boolean;
+			const callRecordings = await Promise.all(
+				events.map(async (event) => await getCallRecording(this, event, includeMeeting)),
+			);
+			return { workflowData: [this.helpers.returnJsonArray(callRecordings)] };
 		}
 
 		const events = getRecordEvents(this).filter((event) => matchesFilter(this, eventType, event));
