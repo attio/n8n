@@ -1,4 +1,4 @@
-import type { INodeProperties } from 'n8n-workflow';
+import type { INodeProperties, ResourceMapperTypeOptions } from 'n8n-workflow';
 import { objectOptions } from '../../shared/objects';
 import { deletedResponse, unwrapResponse } from '../../shared/output';
 import { buildRecordUpsertRequest, buildRecordValuesBody } from './attributes';
@@ -10,6 +10,31 @@ const recordUrl =
 
 // Create or update needs its own mapper, as only the upsert mode asks for an attribute to match on
 function attributesMapper(mode: 'add' | 'upsert', operations: string[]): INodeProperties {
+	const resourceMapper: ResourceMapperTypeOptions = {
+		resourceMapperMethod: 'getRecordAttributes',
+		mode,
+		fieldWords: {
+			singular: 'attribute',
+			plural: 'attributes',
+		},
+		addAllFields: false,
+		supportAutoMap: true,
+		noFieldsError: 'This object has no writable attributes',
+	};
+
+	if (mode === 'upsert') {
+		// Attio matches on a single attribute
+		resourceMapper.multiKeyMatch = false;
+		resourceMapper.matchingFieldsLabels = {
+			title: 'Attribute to Match On',
+			description:
+				'A unique attribute, such as an email address or domain. A record with the same value is updated, otherwise a new record is created.',
+			// The editor can't add a hint to a single attribute, so this covers the
+			// multi-value ones that are usually matched on
+			hint: 'Email addresses, domains and other multi-value attributes take an array, like ["jane@acme.com"]',
+		};
+	}
+
 	return {
 		displayName: 'Attributes',
 		name: 'values',
@@ -25,29 +50,7 @@ function attributesMapper(mode: 'add' | 'upsert', operations: string[]): INodePr
 		typeOptions: {
 			// Which attributes are required depends on the operation
 			loadOptionsDependsOn: ['object', 'operation'],
-			resourceMapper: {
-				resourceMapperMethod: 'getRecordAttributes',
-				mode,
-				fieldWords: {
-					singular: 'attribute',
-					plural: 'attributes',
-				},
-				addAllFields: false,
-				supportAutoMap: true,
-				noFieldsError: 'This object has no writable attributes',
-				...(mode === 'upsert' && {
-					// Attio matches on a single attribute
-					multiKeyMatch: false,
-					matchingFieldsLabels: {
-						title: 'Attribute to Match On',
-						description:
-							'A unique attribute, such as an email address or domain. A record with the same value is updated, otherwise a new record is created.',
-						// The editor can't add a hint to a single attribute, so this covers the
-						// multi-value ones that are usually matched on
-						hint: 'Email addresses, domains and other multi-value attributes take an array, like ["jane@acme.com"]',
-					},
-				}),
-			},
+			resourceMapper,
 		},
 		displayOptions: {
 			show: {
