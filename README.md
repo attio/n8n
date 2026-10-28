@@ -58,6 +58,15 @@ Refer to the [n8n community nodes installation guide](https://docs.n8n.io/integr
   - **Get Many**: list tasks, optionally filtered by assignee, completion status or linked record, and sorted by created or completed date.
   - **Update**: change a task's deadline, completion status, assignees or linked records. Attio doesn't allow task content to be edited through the API.
 
+### Attio Trigger
+
+Starts a workflow from an Attio webhook, which the trigger creates when the workflow is activated and deletes when it's deactivated. Attio only delivers webhooks over HTTPS, so n8n's webhook URL must be public and use HTTPS. Each delivery is checked against the webhook's signature.
+
+- **Record Created**: a record is created on the chosen object. Outputs the record.
+- **Record Updated**: values on a record of the chosen object are updated, optionally only for one attribute. Outputs the record once per delivery, even if several attributes changed.
+- **Include List Entries** (Record Created and Record Updated): adds the record's entries across all lists as `list_entries`, with each entry's list and ID but not its values. Use List Entry **Get** for the values. It's empty if the access token can't read lists.
+- **Record Deleted**: a record is deleted from the chosen object. Outputs the event, with the deleted record's IDs and the actor that deleted it.
+
 List entry operations need the `list_entry:read-write` and `list_configuration:read` scopes. Searching for a record in the dropdown, filtering on record references and parent records, or including parent records in Get Many, also needs `record_permission:read` and `object_configuration:read`.
 
 Task operations need the `task:read-write`, `object_configuration:read`, `record_permission:read` and `user_management:read` scopes.
@@ -104,6 +113,17 @@ pnpm run build
 ```
 
 CI runs lint and build on every pull request.
+
+### Testing the trigger
+
+Attio only sends webhooks to HTTPS URLs, so the Attio Trigger can't be activated or tested against `http://localhost`. Expose n8n through an HTTPS tunnel, such as [ngrok](https://ngrok.com/), and set `WEBHOOK_URL` to the tunnel's public address so n8n registers webhooks with it:
+
+```sh
+ngrok http 5678                                                   # terminal 1
+WEBHOOK_URL=https://<your-subdomain>.ngrok-free.app/ pnpm run dev  # terminal 2, with the address ngrok prints
+```
+
+Then select **Execute step** on the trigger and make a matching change in Attio, such as creating a person. Free ngrok addresses change each time ngrok starts, so restart `pnpm run dev` with the new address.
 
 ## Resources
 

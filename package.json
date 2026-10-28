@@ -40,7 +40,8 @@
 			"dist/credentials/AttioApi.credentials.js"
 		],
 		"nodes": [
-			"dist/nodes/Attio/Attio.node.js"
+			"dist/nodes/Attio/Attio.node.js",
+			"dist/nodes/Attio/AttioTrigger.node.js"
 		]
 	},
 	"devDependencies": {
