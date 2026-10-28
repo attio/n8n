@@ -16,14 +16,17 @@ export type ListResponse = {
 };
 
 export function isListResponse(value: unknown): value is ListResponse {
+	if (!isObject(value)) return false;
+
+	const { id, api_slug, name, parent_object } = value;
+
 	return (
-		isObject(value) &&
-		isObject(value.id) &&
-		typeof value.id.list_id === 'string' &&
-		(typeof value.api_slug === 'string' || value.api_slug === null) &&
-		typeof value.name === 'string' &&
-		Array.isArray(value.parent_object) &&
-		value.parent_object.every((object) => typeof object === 'string')
+		isObject(id) &&
+		typeof id.list_id === 'string' &&
+		(typeof api_slug === 'string' || api_slug === null) &&
+		typeof name === 'string' &&
+		Array.isArray(parent_object) &&
+		parent_object.every((slug) => typeof slug === 'string')
 	);
 }
 
