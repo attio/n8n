@@ -38,6 +38,10 @@ Refer to the [n8n community nodes installation guide](https://docs.n8n.io/integr
   - **Get**: get a note by ID.
   - **Get Many**: list notes, optionally only those on a specific record.
   - **Update**: change a note's title or content. Notes can't be moved to another record.
+- **Record**
+  - **Create**: create a record on any object, such as people, companies or deals. Attributes load from the chosen object, or can be mapped automatically from input fields named after attribute slugs. A person's name is one field that takes the full name in "First Last" order, such as `Jane Doe`. The last word becomes the last name.
+  - **Delete**: delete a record by ID.
+  - **Get**: get a record by ID.
 - **Task**
   - **Create**: create a plaintext task, optionally with a deadline, assignees and linked records.
   - **Delete**: delete a task by ID.
@@ -46,6 +50,8 @@ Refer to the [n8n community nodes installation guide](https://docs.n8n.io/integr
   - **Update**: change a task's deadline, completion status, assignees or linked records. Attio doesn't allow task content to be edited through the API.
 
 Task operations need the `task:read-write`, `object_configuration:read`, `record_permission:read` and `user_management:read` scopes.
+
+Record operations need the `record_permission:read-write` and `object_configuration:read` scopes.
 
 Note operations need the `note:read-write`, `object_configuration:read` and `record_permission:read` scopes.
 

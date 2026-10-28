@@ -1,6 +1,9 @@
 import { NodeConnectionTypes, type INodeType, type INodeTypeDescription } from 'n8n-workflow';
 import { noteDescription } from './resources/note';
+import { recordDescription } from './resources/record';
+import { getRecordAttributes } from './resources/record/attributes';
 import { taskDescription } from './resources/task';
+import { attioBaseUrl } from './shared/request';
 
 export class Attio implements INodeType {
 	description: INodeTypeDescription = {
@@ -24,7 +27,7 @@ export class Attio implements INodeType {
 			},
 		],
 		requestDefaults: {
-			baseURL: 'https://api.attio.com/v2',
+			baseURL: attioBaseUrl,
 			headers: {
 				Accept: 'application/json',
 				'Content-Type': 'application/json',
@@ -42,6 +45,10 @@ export class Attio implements INodeType {
 						value: 'note',
 					},
 					{
+						name: 'Record',
+						value: 'record',
+					},
+					{
 						name: 'Task',
 						value: 'task',
 					},
@@ -49,7 +56,14 @@ export class Attio implements INodeType {
 				default: 'task',
 			},
 			...noteDescription,
+			...recordDescription,
 			...taskDescription,
 		],
+	};
+
+	methods = {
+		resourceMapping: {
+			getRecordAttributes,
+		},
 	};
 }
