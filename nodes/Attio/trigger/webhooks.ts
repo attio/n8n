@@ -9,7 +9,13 @@ import { attioGetList, attioRequest, isObject } from '../shared/request';
 
 export type RecordEventType = 'record.created' | 'record.updated' | 'record.deleted';
 
-export type EventType = RecordEventType | 'task.created' | 'call-recording.created';
+export type ListEntryEventType = 'list-entry.created' | 'list-entry.updated' | 'list-entry.deleted';
+
+export type EventType =
+	| RecordEventType
+	| ListEntryEventType
+	| 'task.created'
+	| 'call-recording.created';
 
 export type WebhookFilter = {
 	$and: Array<{ field: string; operator: 'equals'; value: string }>;
@@ -31,6 +37,19 @@ export type RecordEvent = {
 		record_id: string;
 		attribute_id?: string;
 	};
+	actor: { type: string | null; id: string | null };
+};
+
+export type ListEntryEvent = {
+	event_type: string;
+	id: {
+		workspace_id: string;
+		list_id: string;
+		entry_id: string;
+		attribute_id?: string;
+	};
+	parent_object_id: string;
+	parent_record_id: string;
 	actor: { type: string | null; id: string | null };
 };
 
@@ -67,6 +86,19 @@ function isRecordEvent(value: unknown): value is RecordEvent {
 		isObject(value.id) &&
 		typeof value.id.object_id === 'string' &&
 		typeof value.id.record_id === 'string' &&
+		isObject(value.actor)
+	);
+}
+
+function isListEntryEvent(value: unknown): value is ListEntryEvent {
+	return (
+		isObject(value) &&
+		typeof value.event_type === 'string' &&
+		isObject(value.id) &&
+		typeof value.id.list_id === 'string' &&
+		typeof value.id.entry_id === 'string' &&
+		typeof value.parent_object_id === 'string' &&
+		typeof value.parent_record_id === 'string' &&
 		isObject(value.actor)
 	);
 }
@@ -202,6 +234,10 @@ function getEvents<T>(context: IWebhookFunctions, isEvent: (value: unknown) => v
 
 export function getRecordEvents(context: IWebhookFunctions): RecordEvent[] {
 	return getEvents(context, isRecordEvent);
+}
+
+export function getListEntryEvents(context: IWebhookFunctions): ListEntryEvent[] {
+	return getEvents(context, isListEntryEvent);
 }
 
 export function getTaskEvents(context: IWebhookFunctions): TaskEvent[] {

@@ -1,5 +1,6 @@
 import type { ILoadOptionsFunctions, INodePropertyOptions } from 'n8n-workflow';
 import { isAttributeResponse } from '../resources/record/attributes';
+import { isListResponse } from '../shared/lists';
 import { attioGetList, isObject } from '../shared/request';
 
 type ObjectResponse = {
@@ -36,17 +37,19 @@ export async function getTriggerObjects(
 		.sort(byName);
 }
 
-export async function getTriggerAttributes(
+export async function getTriggerLists(
 	this: ILoadOptionsFunctions,
 ): Promise<INodePropertyOptions[]> {
-	const object = this.getCurrentNodeParameter('object');
-	if (typeof object !== 'string' || object === '') return [];
+	const lists = await attioGetList(this, '/lists', isListResponse);
 
-	const attributes = await attioGetList(
-		this,
-		`/objects/${encodeURIComponent(object)}/attributes`,
-		isAttributeResponse,
-	);
+	return lists.map((list) => ({ name: list.name, value: list.id.list_id })).sort(byName);
+}
+
+async function getAttributeOptions(
+	context: ILoadOptionsFunctions,
+	path: string,
+): Promise<INodePropertyOptions[]> {
+	const attributes = await attioGetList(context, path, isAttributeResponse);
 
 	return [
 		{ name: 'Any Attribute', value: '' },
@@ -54,4 +57,22 @@ export async function getTriggerAttributes(
 			.map((attribute) => ({ name: attribute.title, value: attribute.id.attribute_id }))
 			.sort(byName),
 	];
+}
+
+export async function getTriggerAttributes(
+	this: ILoadOptionsFunctions,
+): Promise<INodePropertyOptions[]> {
+	const object = this.getCurrentNodeParameter('object');
+	if (typeof object !== 'string' || object === '') return [];
+
+	return await getAttributeOptions(this, `/objects/${encodeURIComponent(object)}/attributes`);
+}
+
+export async function getTriggerListAttributes(
+	this: ILoadOptionsFunctions,
+): Promise<INodePropertyOptions[]> {
+	const list = this.getCurrentNodeParameter('list');
+	if (typeof list !== 'string' || list === '') return [];
+
+	return await getAttributeOptions(this, `/lists/${encodeURIComponent(list)}/attributes`);
 }
