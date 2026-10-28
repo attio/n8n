@@ -4,6 +4,7 @@ import {
 	type IExecuteSingleFunctions,
 	type IHttpRequestOptions,
 } from 'n8n-workflow';
+import { toIsoDate } from '../../shared/dates';
 import { invalidValueError, isEmail, isUuid } from '../../shared/validation';
 
 type LinkedRecordsParameter = {
@@ -18,17 +19,7 @@ type TaskFields = {
 };
 
 function toDeadline(this: IExecuteSingleFunctions, value: string | undefined): string | null {
-	if (!value) return null;
-
-	const date = new Date(value);
-	if (Number.isNaN(date.getTime())) {
-		throw new NodeOperationError(this.getNode(), `Invalid deadline "${value}"`, {
-			description: 'Use an ISO 8601 date, for example 2026-10-03T15:00:00Z',
-			itemIndex: this.getItemIndex(),
-		});
-	}
-
-	return date.toISOString();
+	return value ? toIsoDate.call(this, value, 'deadline') : null;
 }
 
 // Assignees come from the member picker as IDs, or from an expression as IDs or emails
