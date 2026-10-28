@@ -93,6 +93,60 @@ function parseNameFieldSlug(id: string): string | undefined {
 	return id.endsWith(nameFieldSuffix) ? id.slice(0, -nameFieldSuffix.length) : undefined;
 }
 
+const referencesFieldSuffix = '.references';
+
+// Record references can be written as a comma-separated list of email addresses, phone numbers
+// and domains, which Attio matches to people and companies. The field id is
+// "<slug>.references" so the text can be told apart and split
+function toReferencesField(attribute: AttributeResponse, isUpdate: boolean): ResourceMapperField {
+	return {
+		id: `${attribute.api_slug}${referencesFieldSuffix}`,
+		displayName: attribute.title,
+		type: 'string',
+		required: !isUpdate && attribute.is_required,
+		defaultMatch: false,
+		canBeUsedToMatch: false,
+		display: true,
+	};
+}
+
+function parseReferencesFieldSlug(id: string): string | undefined {
+	return id.endsWith(referencesFieldSuffix)
+		? id.slice(0, -referencesFieldSuffix.length)
+		: undefined;
+}
+
+// Takes text like "jane@acme.com, acme.com", a JSON array, or an array from an input item.
+// Strings are sent as given, for Attio to match, and objects like
+// { "target_object": "deals", "target_record_id": "..." } are passed through
+function toRecordReferences(
+	this: IExecuteSingleFunctions,
+	displayName: string,
+	value: unknown,
+): unknown[] {
+	let references: unknown = value;
+	if (typeof value === 'string') {
+		const text = value.trim();
+		if (text.startsWith('[') || text.startsWith('{')) {
+			try {
+				references = JSON.parse(text);
+			} catch {
+				throw new NodeOperationError(this.getNode(), `Invalid value for "${displayName}"`, {
+					description:
+						'Use email addresses, phone numbers or domains separated by commas, or valid JSON',
+					itemIndex: this.getItemIndex(),
+				});
+			}
+		} else {
+			references = text.split(',');
+		}
+	}
+
+	return (Array.isArray(references) ? references : [references])
+		.map((reference: unknown) => (typeof reference === 'string' ? reference.trim() : reference))
+		.filter((reference) => !isEmpty(reference));
+}
+
 type Name = Record<'first_name' | 'last_name' | 'full_name', string>;
 
 // The last word is the last name and the rest is the first name. The full name is kept as
@@ -124,21 +178,35 @@ async function loadOptions(
 	return options.map((option) => ({ name: option.title, value: option.title }));
 }
 
+export type AttributeFieldOptions = {
+	// Attributes the node asks for with their own parameters
+	excludedSlugs?: string[];
+	// Whether record references are entered as text, rather than with Attio's value objects
+	referencesAsText?: boolean;
+};
+
 async function loadAttributeFields(
 	this: ILoadOptionsFunctions,
 	attributePath: string,
 	operation: string,
+	options: AttributeFieldOptions,
 ): Promise<ResourceMapperField[]> {
 	const isUpdate = operation === 'update';
+	const excludedSlugs = options.excludedSlugs ?? [];
 
 	const attributes = await attioGetList(this, attributePath, isAttributeResponse);
 
 	const fields = await Promise.all(
 		attributes
 			// Archived attributes and options are left out unless show_archived is set
-			.filter((attribute) => attribute.is_writable)
+			.filter(
+				(attribute) => attribute.is_writable && !excludedSlugs.includes(attribute.api_slug),
+			)
 			.map(async (attribute): Promise<ResourceMapperField[]> => {
 				if (attribute.type === 'personal-name') return [toNameField(attribute, isUpdate)];
+				if (attribute.type === 'record-reference' && options.referencesAsText) {
+					return [toReferencesField(attribute, isUpdate)];
+				}
 
 				const type = toFieldType(attribute);
 
@@ -168,11 +236,12 @@ async function loadAttributeFields(
 export async function getAttributeFields(
 	this: ILoadOptionsFunctions,
 	attributePath: string,
+	options: AttributeFieldOptions = {},
 ): Promise<ResourceMapperFields> {
 	const operation = this.getNodeParameter('operation', '') as string;
 
 	try {
-		return { fields: await loadAttributeFields.call(this, attributePath, operation) };
+		return { fields: await loadAttributeFields.call(this, attributePath, operation, options) };
 	} catch (error) {
 		// The editor drops errors from this method and only says there are no fields,
 		// so the reason is passed back as the notice instead
@@ -212,13 +281,21 @@ export function buildAttributeValues(this: IExecuteSingleFunctions, name: string
 
 	for (const field of mapper.schema) {
 		const nameSlug = parseNameFieldSlug(field.id);
+		const referencesSlug = parseReferencesFieldSlug(field.id);
+		const slug = nameSlug ?? referencesSlug;
 
-		// Input items carry a name in a field named after the attribute, like "name"
-		const value: unknown = source[nameSlug && autoMap ? nameSlug : field.id];
+		// Input items carry these in a field named after the attribute, like "name"
+		const value: unknown = source[slug && autoMap ? slug : field.id];
 		if (isEmpty(value)) continue;
 
 		if (nameSlug) {
 			values[nameSlug] = splitFullName(String(value));
+			continue;
+		}
+
+		if (referencesSlug) {
+			const references = toRecordReferences.call(this, field.displayName, value);
+			if (references.length > 0) values[referencesSlug] = references as IDataObject[];
 			continue;
 		}
 

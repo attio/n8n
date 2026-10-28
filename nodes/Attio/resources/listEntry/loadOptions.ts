@@ -4,22 +4,8 @@ import type {
 	ResourceMapperFields,
 } from 'n8n-workflow';
 import { getListParentObject } from '../../shared/lists';
-import { attioRequest, isObject } from '../../shared/request';
+import { searchObjectRecords } from '../../shared/recordSearch';
 import { getAttributeFields } from '../record/attributes';
-
-type RecordSearchResult = {
-	id: { record_id: string };
-	record_text: string;
-};
-
-function isRecordSearchResult(value: unknown): value is RecordSearchResult {
-	return (
-		isObject(value) &&
-		isObject(value.id) &&
-		typeof value.id.record_id === 'string' &&
-		typeof value.record_text === 'string'
-	);
-}
 
 export async function getListEntryAttributes(
 	this: ILoadOptionsFunctions,
@@ -43,8 +29,7 @@ export async function getListEntryAttributes(
 	return result;
 }
 
-// Searches the records that can be added to the chosen list, matching names, domains, email
-// addresses and the like. Attio's search endpoint returns at most 25 results and has no paging
+// Searches all records of the list's object, not just those already in the list
 export async function searchListParentRecords(
 	this: ILoadOptionsFunctions,
 	filter?: string,
@@ -55,27 +40,5 @@ export async function searchListParentRecords(
 	// Fails for legacy lists, which Create can't add records to either
 	const object = await getListParentObject(this, list);
 
-	const records = await attioRequest(
-		this,
-		{
-			method: 'POST',
-			path: '/objects/records/search',
-			body: {
-				// An empty query returns Attio's default set of results
-				query: filter ?? '',
-				objects: [object],
-				limit: 25,
-				request_as: { type: 'workspace' },
-			},
-		},
-		(data): data is RecordSearchResult[] => Array.isArray(data) && data.every(isRecordSearchResult),
-		'list',
-	);
-
-	return {
-		results: records.map((record) => ({
-			name: record.record_text || record.id.record_id,
-			value: record.id.record_id,
-		})),
-	};
+	return await searchObjectRecords(this, object, filter);
 }

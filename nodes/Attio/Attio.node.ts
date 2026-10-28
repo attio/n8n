@@ -1,4 +1,10 @@
 import { NodeConnectionTypes, type INodeType, type INodeTypeDescription } from 'n8n-workflow';
+import { activityDescription } from './resources/activity';
+import {
+	getActivities,
+	getActivityAttributes,
+	searchLinkedRecords,
+} from './resources/activity/loadOptions';
 import { listEntryDescription } from './resources/listEntry';
 import { getListEntryAttributes, searchListParentRecords } from './resources/listEntry/loadOptions';
 import { noteDescription } from './resources/note';
@@ -49,6 +55,10 @@ export class Attio implements INodeType {
 				noDataExpression: true,
 				options: [
 					{
+						name: 'Activity',
+						value: 'activity',
+					},
+					{
 						name: 'List Entry',
 						value: 'listEntry',
 					},
@@ -67,6 +77,7 @@ export class Attio implements INodeType {
 				],
 				default: 'task',
 			},
+			...activityDescription,
 			...listEntryDescription,
 			...noteDescription,
 			...recordDescription,
@@ -76,15 +87,18 @@ export class Attio implements INodeType {
 
 	methods = {
 		loadOptions: {
+			getActivities,
 			getQueryAttributes,
 			getQueryFilterFields,
 			getQuerySortAttributes,
 			getQuerySortFields,
 		},
 		listSearch: {
+			searchLinkedRecords,
 			searchListParentRecords,
 		},
 		resourceMapping: {
+			getActivityAttributes,
 			getListEntryAttributes,
 			getRecordAttributes,
 		},
