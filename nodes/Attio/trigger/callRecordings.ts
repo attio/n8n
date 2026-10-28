@@ -4,12 +4,8 @@ import {
 	type IWebhookFunctions,
 	type JsonObject,
 } from 'n8n-workflow';
-import { attioGet, isObject } from '../shared/request';
+import { attioGet, dataObjectSchema } from '../shared/request';
 import type { CallRecordingEvent } from './webhooks';
-
-function isDataObject(data: unknown): data is IDataObject {
-	return isObject(data);
-}
 
 // A meeting can be deleted after its call is recorded, so the recording is left without it
 async function getMeeting(
@@ -20,7 +16,7 @@ async function getMeeting(
 		return await attioGet(
 			context,
 			`/meetings/${encodeURIComponent(event.id.meeting_id)}`,
-			isDataObject,
+			dataObjectSchema,
 			'meeting',
 		);
 	} catch (error) {
@@ -41,7 +37,7 @@ export async function getCallRecording(
 		attioGet(
 			context,
 			`/meetings/${encodeURIComponent(meeting_id)}/call_recordings/${encodeURIComponent(call_recording_id)}`,
-			isDataObject,
+			dataObjectSchema,
 			'call recording',
 		),
 		includeMeeting ? getMeeting(context, event) : undefined,

@@ -1,24 +1,15 @@
 import type { ILoadOptionsFunctions, INodePropertyOptions } from 'n8n-workflow';
-import { isAttributeResponse } from '../resources/record/attributes';
+import { z } from 'zod/v4';
+import { attributeSchema } from '../resources/record/attributes';
 import { getAllActivities } from '../shared/activities';
-import { isListResponse } from '../shared/lists';
-import { attioGetList, isObject } from '../shared/request';
+import { listSchema } from '../shared/lists';
+import { attioGetList } from '../shared/request';
 
-type ObjectResponse = {
-	id: { object_id: string };
-	api_slug: string | null;
-	plural_noun: string | null;
-};
-
-function isObjectResponse(value: unknown): value is ObjectResponse {
-	return (
-		isObject(value) &&
-		isObject(value.id) &&
-		typeof value.id.object_id === 'string' &&
-		(typeof value.api_slug === 'string' || value.api_slug === null) &&
-		(typeof value.plural_noun === 'string' || value.plural_noun === null)
-	);
-}
+const objectSchema = z.object({
+	id: z.object({ object_id: z.string() }),
+	api_slug: z.string().nullable(),
+	plural_noun: z.string().nullable(),
+});
 
 function byName(a: INodePropertyOptions, b: INodePropertyOptions): number {
 	return a.name.localeCompare(b.name);
@@ -28,7 +19,7 @@ function byName(a: INodePropertyOptions, b: INodePropertyOptions): number {
 export async function getTriggerObjects(
 	this: ILoadOptionsFunctions,
 ): Promise<INodePropertyOptions[]> {
-	const objects = await attioGetList(this, '/objects', isObjectResponse);
+	const objects = await attioGetList(this, '/objects', objectSchema);
 
 	return objects
 		.map((object) => ({
@@ -41,7 +32,7 @@ export async function getTriggerObjects(
 export async function getTriggerLists(
 	this: ILoadOptionsFunctions,
 ): Promise<INodePropertyOptions[]> {
-	const lists = await attioGetList(this, '/lists', isListResponse);
+	const lists = await attioGetList(this, '/lists', listSchema);
 
 	return lists.map((list) => ({ name: list.name, value: list.id.list_id })).sort(byName);
 }
@@ -60,7 +51,7 @@ async function getAttributeOptions(
 	context: ILoadOptionsFunctions,
 	path: string,
 ): Promise<INodePropertyOptions[]> {
-	const attributes = await attioGetList(context, path, isAttributeResponse);
+	const attributes = await attioGetList(context, path, attributeSchema);
 
 	return [
 		{ name: 'Any Attribute', value: '' },

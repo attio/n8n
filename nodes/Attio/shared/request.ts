@@ -7,6 +7,7 @@ import {
 	type ILoadOptionsFunctions,
 	type IWebhookFunctions,
 } from 'n8n-workflow';
+import { z } from 'zod/v4';
 
 export const attioBaseUrl = 'https://api.attio.com/v2';
 
@@ -16,8 +17,18 @@ type AttioContext =
 	| IHookFunctions
 	| IWebhookFunctions;
 
-export function isObject(value: unknown): value is Record<string, unknown> {
+function isObject(value: unknown): value is Record<string, unknown> {
 	return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+// Any object, for responses that are output as they are
+export const dataObjectSchema = z.custom<IDataObject>(isObject);
+
+// Schemas list only the fields this node reads, rather than mirroring Attio's full response types.
+// The value is returned as it is, not zod's parsed output, which would drop every other field, so
+// records, tasks and events keep everything Attio returns
+export function matches<T>(schema: z.ZodType<T>, value: unknown): value is T {
+	return schema.safeParse(value).success;
 }
 
 // For load methods, preSend functions and the trigger, which can't use declarative routing.
@@ -25,7 +36,7 @@ export function isObject(value: unknown): value is Record<string, unknown> {
 export async function attioRequest<T>(
 	context: AttioContext,
 	request: { method: IHttpRequestMethods; path: string; body?: IDataObject },
-	isData: (data: unknown) => data is T,
+	schema: z.ZodType<T>,
 	expected: string,
 ): Promise<T> {
 	const { method, path, body } = request;
@@ -41,7 +52,7 @@ export async function attioRequest<T>(
 	);
 
 	const data = isObject(response) ? response.data : undefined;
-	if (!isData(data)) {
+	if (!matches(schema, data)) {
 		throw new NodeOperationError(context.getNode(), 'Unexpected response from Attio', {
 			description: `${method} ${path} didn't return the expected ${expected}`,
 		});
@@ -53,33 +64,32 @@ export async function attioRequest<T>(
 export async function attioGet<T>(
 	context: AttioContext,
 	path: string,
-	isData: (data: unknown) => data is T,
+	schema: z.ZodType<T>,
 	expected: string,
 ): Promise<T> {
-	return await attioRequest(context, { method: 'GET', path }, isData, expected);
+	return await attioRequest(context, { method: 'GET', path }, schema, expected);
 }
 
 // Attio list endpoints return { data: [...] }, and each item is checked
 export async function attioGetList<T>(
 	context: AttioContext,
 	path: string,
-	isItem: (item: unknown) => item is T,
+	itemSchema: z.ZodType<T>,
 ): Promise<T[]> {
-	return await attioGet(
-		context,
-		path,
-		(data): data is T[] => Array.isArray(data) && data.every(isItem),
-		'list',
-	);
+	return await attioGet(context, path, z.array(itemSchema), 'list');
 }
 
 // Cursor-paginated endpoints return the next page's cursor beside `data`, until it's null
 export async function attioGetAllByCursor<T>(
 	context: AttioContext,
 	path: string,
-	isItem: (item: unknown) => item is T,
+	itemSchema: z.ZodType<T>,
 	pageSize: number,
 ): Promise<T[]> {
+	const pageSchema = z.object({
+		data: z.array(itemSchema),
+		pagination: z.object({ next_cursor: z.string().nullable() }),
+	});
 	const items: T[] = [];
 	let cursor: string | null = null;
 
@@ -95,21 +105,14 @@ export async function attioGetAllByCursor<T>(
 			},
 		);
 
-		const data = isObject(response) ? response.data : undefined;
-		const pagination = isObject(response) ? response.pagination : undefined;
-		const nextCursor = isObject(pagination) ? pagination.next_cursor : undefined;
-		if (
-			!Array.isArray(data) ||
-			!data.every(isItem) ||
-			(typeof nextCursor !== 'string' && nextCursor !== null)
-		) {
+		if (!matches(pageSchema, response)) {
 			throw new NodeOperationError(context.getNode(), 'Unexpected response from Attio', {
 				description: `GET ${path} didn't return the expected list`,
 			});
 		}
 
-		items.push(...data);
-		cursor = nextCursor;
+		items.push(...response.data);
+		cursor = response.pagination.next_cursor;
 	} while (cursor !== null);
 
 	return items;

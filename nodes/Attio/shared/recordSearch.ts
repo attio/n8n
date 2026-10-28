@@ -1,19 +1,11 @@
 import type { ILoadOptionsFunctions, INodeListSearchResult } from 'n8n-workflow';
-import { attioRequest, isObject } from './request';
+import { z } from 'zod/v4';
+import { attioRequest } from './request';
 
-type RecordSearchResult = {
-	id: { record_id: string };
-	record_text: string;
-};
-
-function isRecordSearchResult(value: unknown): value is RecordSearchResult {
-	return (
-		isObject(value) &&
-		isObject(value.id) &&
-		typeof value.id.record_id === 'string' &&
-		typeof value.record_text === 'string'
-	);
-}
+const recordSearchResultSchema = z.object({
+	id: z.object({ record_id: z.string() }),
+	record_text: z.string(),
+});
 
 // Searches an object's records, matching names, domains, email addresses and the like. Attio's
 // search endpoint returns at most 25 results and has no paging
@@ -35,7 +27,7 @@ export async function searchObjectRecords(
 				request_as: { type: 'workspace' },
 			},
 		},
-		(data): data is RecordSearchResult[] => Array.isArray(data) && data.every(isRecordSearchResult),
+		z.array(recordSearchResultSchema),
 		'list',
 	);
 

@@ -1,5 +1,5 @@
 import type { IDataObject, IWebhookFunctions } from 'n8n-workflow';
-import { attioGet, isObject } from '../shared/request';
+import { attioGet, dataObjectSchema } from '../shared/request';
 import type { ActivityRecordEvent } from './webhooks';
 
 export async function getActivityRecord(
@@ -10,7 +10,7 @@ export async function getActivityRecord(
 	return await attioGet(
 		context,
 		`/activities/${encodeURIComponent(activity_id)}/records/${encodeURIComponent(record_id)}`,
-		(data): data is IDataObject => isObject(data),
+		dataObjectSchema,
 		'activity record',
 	);
 }

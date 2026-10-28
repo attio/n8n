@@ -4,12 +4,8 @@ import {
 	type IWebhookFunctions,
 	type JsonObject,
 } from 'n8n-workflow';
-import { attioGet, isObject } from '../shared/request';
+import { attioGet, dataObjectSchema } from '../shared/request';
 import type { ListEntryEvent } from './webhooks';
-
-function isDataObject(data: unknown): data is IDataObject {
-	return isObject(data);
-}
 
 // The record can be deleted after the event, such as when deleting it removes it from the list,
 // so it's null like the List Entry Get Many output
@@ -22,7 +18,7 @@ async function getParentRecord(
 		return await attioGet(
 			context,
 			`/objects/${encodeURIComponent(parent_object_id)}/records/${encodeURIComponent(parent_record_id)}`,
-			isDataObject,
+			dataObjectSchema,
 			'record',
 		);
 	} catch (error) {
@@ -41,7 +37,7 @@ export async function getListEntry(
 		attioGet(
 			context,
 			`/lists/${encodeURIComponent(list_id)}/entries/${encodeURIComponent(entry_id)}`,
-			isDataObject,
+			dataObjectSchema,
 			'list entry',
 		),
 		includeParentRecord ? getParentRecord(context, event) : undefined,

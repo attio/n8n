@@ -12,43 +12,24 @@ import {
 	type ResourceMapperFields,
 	type ResourceMapperValue,
 } from 'n8n-workflow';
-import { attioGetList, isObject } from '../../shared/request';
+import { z } from 'zod/v4';
+import { attioGetList } from '../../shared/request';
 
-export type AttributeResponse = {
-	id: { attribute_id: string };
-	title: string;
-	api_slug: string;
-	type: string;
-	is_writable: boolean;
-	is_required: boolean;
-	is_unique: boolean;
-	is_multiselect: boolean;
-	is_default_value_enabled: boolean;
-};
+export const attributeSchema = z.object({
+	id: z.object({ attribute_id: z.string() }),
+	title: z.string(),
+	api_slug: z.string(),
+	type: z.string(),
+	is_writable: z.boolean(),
+	is_required: z.boolean(),
+	is_unique: z.boolean(),
+	is_multiselect: z.boolean(),
+	is_default_value_enabled: z.boolean(),
+});
 
-type AttributeOptionResponse = {
-	title: string;
-};
+export type AttributeResponse = z.infer<typeof attributeSchema>;
 
-export function isAttributeResponse(value: unknown): value is AttributeResponse {
-	return (
-		isObject(value) &&
-		isObject(value.id) &&
-		typeof value.id.attribute_id === 'string' &&
-		typeof value.title === 'string' &&
-		typeof value.api_slug === 'string' &&
-		typeof value.type === 'string' &&
-		typeof value.is_writable === 'boolean' &&
-		typeof value.is_required === 'boolean' &&
-		typeof value.is_unique === 'boolean' &&
-		typeof value.is_multiselect === 'boolean' &&
-		typeof value.is_default_value_enabled === 'boolean'
-	);
-}
-
-function isAttributeOptionResponse(value: unknown): value is AttributeOptionResponse {
-	return isObject(value) && typeof value.title === 'string';
-}
+const attributeOptionSchema = z.object({ title: z.string() });
 
 // Every writable attribute type accepts a plain string, number or boolean shorthand,
 // so values are sent as entered rather than built into Attio's value objects
@@ -172,7 +153,7 @@ async function loadOptions(
 	const options = await attioGetList(
 		this,
 		`${attributePath}/${encodeURIComponent(attribute.api_slug)}/${endpoint}`,
-		isAttributeOptionResponse,
+		attributeOptionSchema,
 	);
 
 	return options.map((option) => ({ name: option.title, value: option.title }));
@@ -194,14 +175,12 @@ async function loadAttributeFields(
 	const isUpdate = operation === 'update';
 	const excludedSlugs = options.excludedSlugs ?? [];
 
-	const attributes = await attioGetList(this, attributePath, isAttributeResponse);
+	const attributes = await attioGetList(this, attributePath, attributeSchema);
 
 	const fields = await Promise.all(
 		attributes
 			// Archived attributes and options are left out unless show_archived is set
-			.filter(
-				(attribute) => attribute.is_writable && !excludedSlugs.includes(attribute.api_slug),
-			)
+			.filter((attribute) => attribute.is_writable && !excludedSlugs.includes(attribute.api_slug))
 			.map(async (attribute): Promise<ResourceMapperField[]> => {
 				if (attribute.type === 'personal-name') return [toNameField(attribute, isUpdate)];
 				if (attribute.type === 'record-reference' && options.referencesAsText) {

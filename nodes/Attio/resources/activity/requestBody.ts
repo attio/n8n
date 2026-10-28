@@ -6,9 +6,13 @@ import {
 	type IHttpRequestOptions,
 	type INodeParameterResourceLocator,
 } from 'n8n-workflow';
-import { isObject } from '../../shared/request';
+import { z } from 'zod/v4';
+import { dataObjectSchema, matches } from '../../shared/request';
 import { invalidValueError, isEmail, isUuid } from '../../shared/validation';
 import { buildAttributeValues } from '../record/attributes';
+
+// Email addresses, domains or record references
+const linkedRecordsJsonSchema = z.array(z.union([z.string(), dataObjectSchema]));
 
 type LinkedRecordsParameter = {
 	record?: Array<{ object: string; record: INodeParameterResourceLocator }>;
@@ -66,10 +70,7 @@ function parseLinkedRecordsJson(this: IExecuteSingleFunctions): unknown[] {
 		}
 	}
 
-	if (
-		!Array.isArray(linkedRecords) ||
-		!linkedRecords.every((item) => isObject(item) || typeof item === 'string')
-	) {
+	if (!matches(linkedRecordsJsonSchema, linkedRecords)) {
 		throw new NodeOperationError(this.getNode(), 'Invalid linked records JSON', {
 			description: `'Linked Records (JSON)' must be an array of email addresses, domains or record references. For the record reference syntax, see https://docs.attio.com/rest-api/guides/activities#linking-records-by-attribute-value`,
 			itemIndex: this.getItemIndex(),

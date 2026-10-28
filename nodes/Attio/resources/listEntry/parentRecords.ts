@@ -1,13 +1,10 @@
-import type { IDataObject, IExecuteSingleFunctions, INodeExecutionData } from 'n8n-workflow';
-import { attioRequest, isObject } from '../../shared/request';
+import type { IExecuteSingleFunctions, INodeExecutionData } from 'n8n-workflow';
+import { z } from 'zod/v4';
+import { attioRequest } from '../../shared/request';
 
-type RecordResponse = IDataObject & {
-	id: { record_id: string };
-};
-
-function isRecordResponse(value: unknown): value is RecordResponse {
-	return isObject(value) && isObject(value.id) && typeof value.id.record_id === 'string';
-}
+const recordSchema = z.object({
+	id: z.object({ record_id: z.string() }),
+});
 
 // Adds each entry's parent record to it as parent_record, as entries only include the record's ID.
 // The records are fetched with one query per object, rather than one request per entry
@@ -26,7 +23,7 @@ export async function addParentRecords(
 		idsByObject.set(object, (idsByObject.get(object) ?? new Set()).add(recordId));
 	}
 
-	const records = new Map<string, RecordResponse>();
+	const records = new Map<string, z.infer<typeof recordSchema>>();
 	await Promise.all(
 		[...idsByObject].map(async ([object, ids]) => {
 			const found = await attioRequest(
@@ -36,7 +33,7 @@ export async function addParentRecords(
 					path: `/objects/${encodeURIComponent(object)}/records/query`,
 					body: { filter: { record_id: { $in: [...ids] } }, limit: ids.size },
 				},
-				(data): data is RecordResponse[] => Array.isArray(data) && data.every(isRecordResponse),
+				z.array(recordSchema),
 				'list',
 			);
 			for (const record of found) records.set(record.id.record_id, record);

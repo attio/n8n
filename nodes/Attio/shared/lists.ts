@@ -4,31 +4,17 @@ import {
 	type ILoadOptionsFunctions,
 	type INodePropertyTypeOptions,
 } from 'n8n-workflow';
+import { z } from 'zod/v4';
 import { unwrapResponse } from './output';
-import { attioGet, isObject } from './request';
+import { attioGet } from './request';
 
-export type ListResponse = {
-	id: { list_id: string };
-	api_slug: string | null;
-	name: string;
+export const listSchema = z.object({
+	id: z.object({ list_id: z.string() }),
+	api_slug: z.string().nullable(),
+	name: z.string(),
 	// Legacy lists can allow records from more than one object
-	parent_object: string[];
-};
-
-export function isListResponse(value: unknown): value is ListResponse {
-	if (!isObject(value)) return false;
-
-	const { id, api_slug, name, parent_object } = value;
-
-	return (
-		isObject(id) &&
-		typeof id.list_id === 'string' &&
-		(typeof api_slug === 'string' || api_slug === null) &&
-		typeof name === 'string' &&
-		Array.isArray(parent_object) &&
-		parent_object.every((slug) => typeof slug === 'string')
-	);
-}
+	parent_object: z.array(z.string()),
+});
 
 // Lists the workspace's lists, keyed by slug, falling back to ID for lists without one
 export const listOptions: INodePropertyTypeOptions = {
@@ -69,7 +55,7 @@ export async function getListParentObject(
 	const { name, parent_object: parentObjects } = await attioGet(
 		context,
 		`/lists/${encodeURIComponent(list)}`,
-		isListResponse,
+		listSchema,
 		'list',
 	);
 

@@ -4,25 +4,18 @@ import {
 	type IWebhookFunctions,
 	type JsonObject,
 } from 'n8n-workflow';
-import { attioGet, attioGetList, isObject } from '../shared/request';
+import { z } from 'zod/v4';
+import { attioGet, attioGetList, dataObjectSchema } from '../shared/request';
 import type { RecordEvent } from './webhooks';
 
-type ListEntryReference = {
-	list_id: string;
-	list_api_slug: string;
-	entry_id: string;
-	created_at: string;
-};
+const listEntryReferenceSchema = z.object({
+	list_id: z.string(),
+	list_api_slug: z.string(),
+	entry_id: z.string(),
+	created_at: z.string(),
+});
 
-function isListEntryReference(value: unknown): value is ListEntryReference {
-	return (
-		isObject(value) &&
-		typeof value.list_id === 'string' &&
-		typeof value.list_api_slug === 'string' &&
-		typeof value.entry_id === 'string' &&
-		typeof value.created_at === 'string'
-	);
-}
+type ListEntryReference = z.infer<typeof listEntryReferenceSchema>;
 
 function recordPath(event: RecordEvent): string {
 	const { object_id, record_id } = event.id;
@@ -42,7 +35,7 @@ async function getListEntries(
 			const page = await attioGetList(
 				context,
 				`${recordPath(event)}/entries?limit=${pageSize}&offset=${offset}`,
-				isListEntryReference,
+				listEntryReferenceSchema,
 			);
 			entries.push(...page);
 			if (page.length < pageSize) return entries;
@@ -60,7 +53,7 @@ export async function getRecord(
 	includeListEntries: boolean,
 ): Promise<IDataObject> {
 	const [record, listEntries] = await Promise.all([
-		attioGet(context, recordPath(event), (data): data is IDataObject => isObject(data), 'record'),
+		attioGet(context, recordPath(event), dataObjectSchema, 'record'),
 		includeListEntries ? getListEntries(context, event) : undefined,
 	]);
 

@@ -1,23 +1,18 @@
 import type { ILoadOptionsFunctions } from 'n8n-workflow';
-import { attioGetAllByCursor, isObject } from './request';
+import { z } from 'zod/v4';
+import { attioGetAllByCursor } from './request';
 
-export type ActivityResponse = {
-	id: { activity_id: string };
-	api_slug: string;
-	singular_noun: string;
-};
+const activitySchema = z.object({
+	id: z.object({ activity_id: z.string() }),
+	api_slug: z.string(),
+	singular_noun: z.string(),
+});
 
-function isActivityResponse(value: unknown): value is ActivityResponse {
-	return (
-		isObject(value) &&
-		isObject(value.id) &&
-		typeof value.id.activity_id === 'string' &&
-		typeof value.api_slug === 'string' &&
-		typeof value.singular_noun === 'string'
-	);
-}
+export type ActivityResponse = z.infer<typeof activitySchema>;
 
 // Activities are in early access, so this fails unless they're enabled for the workspace
-export async function getAllActivities(context: ILoadOptionsFunctions): Promise<ActivityResponse[]> {
-	return await attioGetAllByCursor(context, '/activities', isActivityResponse, 1000);
+export async function getAllActivities(
+	context: ILoadOptionsFunctions,
+): Promise<ActivityResponse[]> {
+	return await attioGetAllByCursor(context, '/activities', activitySchema, 1000);
 }
