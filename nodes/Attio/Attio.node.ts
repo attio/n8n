@@ -1,4 +1,5 @@
 import { NodeConnectionTypes, type INodeType, type INodeTypeDescription } from 'n8n-workflow';
+import { taskDescription } from './resources/task';
 
 export class Attio implements INodeType {
 	description: INodeTypeDescription = {
@@ -36,38 +37,13 @@ export class Attio implements INodeType {
 				noDataExpression: true,
 				options: [
 					{
-						name: 'Workspace',
-						value: 'workspace',
+						name: 'Task',
+						value: 'task',
 					},
 				],
-				default: 'workspace',
+				default: 'task',
 			},
-			{
-				displayName: 'Operation',
-				name: 'operation',
-				type: 'options',
-				noDataExpression: true,
-				displayOptions: {
-					show: {
-						resource: ['workspace'],
-					},
-				},
-				options: [
-					{
-						name: 'Get',
-						value: 'get',
-						description: 'Get the workspace and scopes of the connected access token',
-						action: 'Get the current workspace',
-						routing: {
-							request: {
-								method: 'GET',
-								url: '/self',
-							},
-						},
-					},
-				],
-				default: 'get',
-			},
+			...taskDescription,
 		],
 	};
 }
