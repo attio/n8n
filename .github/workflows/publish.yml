@@ -72,6 +72,9 @@ jobs:
         # In GitHub Actions, n8n-node release runs lint and build, then npm publish with provenance.
         run: 'pnpm run release'
         env:
+          # Temporary, for the first publish only: npm can't add a trusted publisher to a package that
+          # doesn't exist yet. Remove this once the trusted publisher is configured.
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
           # Prereleases such as 1.0.0-rc.1 go to the "next" dist-tag so they don't become "latest".
           NPM_CONFIG_TAG: ${{ contains(steps.check.outputs.version, '-') && 'next' || 'latest' }}
 
