@@ -140,7 +140,7 @@ Then select **Execute step** on the trigger and make a matching change in Attio,
 
 ### Releasing
 
-n8n only verifies community nodes published from GitHub Actions with [npm provenance](https://docs.npmjs.com/generating-provenance-statements), so every release goes through a reviewed pull request and nothing is published from a laptop.
+n8n only verifies community nodes published from GitHub Actions with [npm provenance](https://docs.npmjs.com/generating-provenance-statements), so every release goes through a reviewed pull request and no release is published from a laptop.
 
 1. In a pull request, bump the version and add an entry for it to `CHANGELOG.md`:
 
