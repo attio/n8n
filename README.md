@@ -138,6 +138,20 @@ WEBHOOK_URL=https://<your-subdomain>.ngrok-free.app/ pnpm run dev  # terminal 2,
 
 Then select **Execute step** on the trigger and make a matching change in Attio, such as creating a person. Free ngrok addresses change each time ngrok starts, so restart `pnpm run dev` with the new address.
 
+### Releasing
+
+n8n only verifies community nodes published from GitHub Actions with [npm provenance](https://docs.npmjs.com/generating-provenance-statements), so every release goes through a reviewed pull request and no release is published from a laptop.
+
+1. In a pull request, bump the version and add an entry for it to `CHANGELOG.md`:
+
+   ```sh
+   npm version minor --no-git-tag-version   # or patch, major, prerelease
+   ```
+
+2. Once the pull request is reviewed and merged, [`publish.yml`](.github/workflows/publish.yml) publishes the new version of `@attio/n8n-nodes-attio` to npm with provenance, then tags the merge commit and creates a GitHub release. Prereleases such as `1.0.0-rc.1` are published under npm's `next` dist-tag.
+
+The workflow authenticates with npm [Trusted Publishing](https://docs.npmjs.com/trusted-publishers), configured on npmjs.com for the `attio/n8n` repository, the `publish.yml` workflow and the `npm` environment. Don't run `pnpm run release` locally: it's the command the workflow runs to publish, and on a laptop it tries to tag and push to `main` directly.
+
 ## Resources
 
 - [n8n community nodes documentation](https://docs.n8n.io/integrations/#community-nodes)
