@@ -11,7 +11,8 @@
 		"crm"
 	],
 	"author": {
-		"name": "Attio",
+		"name": "Integrations Support",
+		"email": "integrations@attio.com",
 		"url": "https://attio.com"
 	},
 	"repository": {
