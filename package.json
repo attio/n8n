@@ -11,8 +11,9 @@
 		"crm"
 	],
 	"author": {
-		"name": "Eoghan Mulcahy",
-		"email": "eoghan.mulcahy@attio.com"
+		"name": "Integrations Support",
+		"email": "integrations@attio.com",
+		"url": "https://attio.com"
 	},
 	"repository": {
 		"type": "git",
