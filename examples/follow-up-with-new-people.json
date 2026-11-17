@@ -1,0 +1,69 @@
+{
+	"name": "Follow up with new people",
+	"nodes": [
+		{
+			"parameters": {
+				"content": "## Follow up with new people\nWhen a person is added to Attio, create a task to follow up with them in two days, linked to their record.\n\n### Setup\n1. Select your Attio credential on both Attio nodes.\n2. In **Person created**, set **Object** to People.\n3. Activate the workflow. Attio only sends webhooks to HTTPS URLs, so n8n must be reachable over public HTTPS.",
+				"width": 560,
+				"height": 460,
+				"color": 7
+			},
+			"id": "87ccae38-2dac-4f39-b4a7-ba077ded6ed2",
+			"name": "Follow up with new people",
+			"type": "n8n-nodes-base.stickyNote",
+			"typeVersion": 1,
+			"position": [-80, -200]
+		},
+		{
+			"parameters": {
+				"event": "record.created",
+				"object": ""
+			},
+			"id": "438565ca-b44b-4a30-b576-53e0cebc2a19",
+			"name": "Person created",
+			"type": "@attio/n8n-nodes-attio.attioTrigger",
+			"typeVersion": 1,
+			"position": [0, 100],
+			"webhookId": "af0ca65c-4aad-4546-b41a-a545a95acab3"
+		},
+		{
+			"parameters": {
+				"resource": "task",
+				"operation": "create",
+				"content": "=Follow up with {{ $json.values.name?.[0]?.full_name || 'this person' }}",
+				"additionalFields": {
+					"deadlineAt": "={{ $now.plus({ days: 2 }).toISO() }}",
+					"linkedRecords": {
+						"record": [
+							{
+								"object": "people",
+								"recordId": "={{ $json.id.record_id }}"
+							}
+						]
+					}
+				}
+			},
+			"id": "4d43a465-e18b-4227-a46d-069ada33dd03",
+			"name": "Create follow-up task",
+			"type": "@attio/n8n-nodes-attio.attio",
+			"typeVersion": 1,
+			"position": [240, 100]
+		}
+	],
+	"connections": {
+		"Person created": {
+			"main": [
+				[
+					{
+						"node": "Create follow-up task",
+						"type": "main",
+						"index": 0
+					}
+				]
+			]
+		}
+	},
+	"settings": {
+		"executionOrder": "v1"
+	}
+}

@@ -7,6 +7,8 @@ This is an n8n community node package. It lets you use [Attio](https://attio.com
 [Installation](#installation)
 [Operations](#operations)
 [Credentials](#credentials)
+[Example workflow](#example-workflow)
+[Compatibility](#compatibility)
 [Development](#development)
 [Support](#support)
 [Resources](#resources)
@@ -102,6 +104,16 @@ Refer to the [Attio authentication guide](https://docs.attio.com/rest-api/guides
 1. In n8n, go to **Credentials > Add credential** and select **Attio API**.
 2. Paste the access token into **Access Token**.
 3. Save. n8n checks the token against Attio's `/v2/self` endpoint and reports whether it is valid.
+
+## Example workflow
+
+[`examples/follow-up-with-new-people.json`](examples/follow-up-with-new-people.json) creates a task to follow up with each new person in Attio, due in two days and linked to their record. It uses only the Attio Trigger and Attio nodes.
+
+To try it, import the file with **Import from File** in n8n's workflow menu, then follow the setup steps in the note on the canvas.
+
+## Compatibility
+
+Tested with n8n 2.45.1.
 
 ## Development
 

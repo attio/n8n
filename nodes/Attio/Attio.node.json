@@ -1,0 +1,19 @@
+{
+	"node": "@attio/n8n-nodes-attio.attio",
+	"nodeVersion": "1.0",
+	"codexVersion": "1.0",
+	"categories": ["Sales"],
+	"alias": ["crm"],
+	"resources": {
+		"credentialDocumentation": [
+			{
+				"url": "https://github.com/attio/n8n#credentials"
+			}
+		],
+		"primaryDocumentation": [
+			{
+				"url": "https://github.com/attio/n8n#readme"
+			}
+		]
+	}
+}
